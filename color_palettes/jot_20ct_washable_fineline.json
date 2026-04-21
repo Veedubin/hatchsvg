@@ -1,0 +1,27 @@
+{
+  "brand": "Jot",
+  "set_name": "Washable Fineline 20ct",
+  "tip_width_mm": 0.7,
+  "colors": [
+    { "name": "Purple 1", "hex": "#4B3F8F" },
+    { "name": "Purple 2", "hex": "#7142B7" },
+    { "name": "Blue 1",   "hex": "#1E4FB8" },
+    { "name": "Blue 2",   "hex": "#2E6FD1" },
+    { "name": "Blue 3",   "hex": "#2D8BD5" },
+    { "name": "Teal 1",   "hex": "#139999" },
+    { "name": "Teal 2",   "hex": "#0DA27E" },
+    { "name": "Green 1",  "hex": "#1E8C2F" },
+    { "name": "Green 2",  "hex": "#5FBF33" },
+    { "name": "Lime",     "hex": "#B7E63A" },
+    { "name": "Yellow",   "hex": "#FFE52A" },
+    { "name": "Yellow-Orange", "hex": "#FFC327" },
+    { "name": "Orange",   "hex": "#FF8A24" },
+    { "name": "Red-Orange", "hex": "#FF4B2E" },
+    { "name": "Red",      "hex": "#E3222A" },
+    { "name": "Pink 1",   "hex": "#FF5CA8" },
+    { "name": "Pink 2",   "hex": "#FF3F7C" },
+    { "name": "Brown 1",  "hex": "#6A3A22" },
+    { "name": "Brown 2",  "hex": "#3F2414" },
+    { "name": "Dark Gray", "hex": "#3A3D44" }
+  ]
+}

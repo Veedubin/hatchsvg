@@ -1,0 +1,21 @@
+{
+  "plugin": ["opencode-boomerang"],
+  "mcp": {
+    "super-memory": {
+      "type": "local",
+      "command": ["uvx", "super-memory-mcp"],
+      "enabled": true
+    },
+    "searxng": {
+      "type": "local",
+      "command": ["npx", "-y", "mcp-searxng"],
+      "environment": { "SEARXNG_URL": "http://localhost:8080" },
+      "enabled": false
+    },
+    "sequential-thinking": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "enabled": true
+    }
+  }
+}

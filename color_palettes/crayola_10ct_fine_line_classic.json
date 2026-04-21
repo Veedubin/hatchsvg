@@ -1,0 +1,17 @@
+{
+  "brand": "Crayola",
+  "set_name": "10ct Fine Line Classic",
+  "tip_width_mm": 0.8,
+  "colors": [
+    {"name": "Black",  "hex": "#000000"},
+    {"name": "Brown",  "hex": "#8B4513"},
+    {"name": "Purple", "hex": "#7F3FBF"},
+    {"name": "Blue",   "hex": "#1E4DB7"},
+    {"name": "Green",  "hex": "#0E8A16"},
+    {"name": "Yellow", "hex": "#FFD500"},
+    {"name": "Orange", "hex": "#FF8A00"},
+    {"name": "Red",    "hex": "#E62129"},
+    {"name": "Pink",   "hex": "#FF5CA8"},
+    {"name": "Gray",   "hex": "#808080"}
+  ]
+}

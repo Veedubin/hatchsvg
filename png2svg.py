@@ -42,6 +42,7 @@ class RenderParams:
     scale: float = 1.0
     separate_outline: bool = False
     naming_mode: str = "inkscape"
+    continuous_paths: bool = False
 
 
 @dataclass
@@ -87,8 +88,8 @@ def find_segments_in_row(row: np.ndarray) -> List[Tuple[int, int]]:
     return segs
 
 
-def hatch_path_for_mask(mask: np.ndarray, line_step: int) -> str:
-    """Flatten all hatch segments into ONE path 'd' string."""
+def _hatch_path_legacy(mask: np.ndarray, line_step: int) -> str:
+    """Legacy hatch path generation - all lines left-to-right with separate M commands."""
     h, _ = mask.shape
     cmds = []
     step = max(1, line_step)
@@ -97,6 +98,44 @@ def hatch_path_for_mask(mask: np.ndarray, line_step: int) -> str:
         segs = find_segments_in_row(row)
         for x1, x2 in segs:
             cmds.append(f"M{x1} {y} H{x2}")
+    return " ".join(cmds)
+
+
+def hatch_path_for_mask(mask: np.ndarray, line_step: int, continuous: bool = False) -> str:
+    """Flatten all hatch segments into ONE path 'd' string.
+    
+    When continuous=True, generates serpentine paths that alternate direction
+    per row to reduce pen plotter vibration (ringing). Contiguous segments
+    within a row are connected to minimize pen lifts.
+    """
+    if not continuous:
+        return _hatch_path_legacy(mask, line_step)
+
+    h, _ = mask.shape
+    cmds = []
+    step = max(1, line_step)
+
+    for row_idx, y in enumerate(range(0, h, step)):
+        row = mask[y]
+        segs = find_segments_in_row(row)
+        if not segs:
+            continue
+
+        # Even rows (0,2,4): left-to-right; Odd rows (1,3,5): right-to-left
+        if row_idx % 2 == 1:
+            # Reverse segment order and swap start/end for R→L direction
+            segs = [(x2, x1) for x1, x2 in reversed(segs)]
+
+        # Chain contiguous segments within the row
+        is_first_seg = True
+        for x1, x2 in segs:
+            if is_first_seg:
+                cmds.append(f"M{x1} {y} H{x2}")
+                is_first_seg = False
+            else:
+                # Continue drawing - just extend to new x2
+                cmds.append(f"H{x2}")
+
     return " ".join(cmds)
 
 
@@ -111,10 +150,10 @@ def border_mask(mask: np.ndarray) -> np.ndarray:
     return mask & ~interior
 
 
-def outline_path_for_mask(mask: np.ndarray) -> str:
+def outline_path_for_mask(mask: np.ndarray, continuous: bool = False) -> str:
     """Flatten all outline segments into one path string (border only)."""
     bmask = border_mask(mask)
-    return hatch_path_for_mask(bmask, line_step=1)
+    return hatch_path_for_mask(bmask, line_step=1, continuous=continuous)
 
 
 def luminance(rgb: Tuple[int, int, int]) -> float:
@@ -594,8 +633,8 @@ def _create_layer_groups(
     marker_counters: Dict[str, int]
 ) -> List[str]:
     """Generate the SVG group strings for a specific layer."""
-    d_hatch = "" if style.is_white else hatch_path_for_mask(mask, style.line_step)
-    d_outline = outline_path_for_mask(mask)
+    d_hatch = "" if style.is_white else hatch_path_for_mask(mask, style.line_step, params.continuous_paths)
+    d_outline = outline_path_for_mask(mask, params.continuous_paths)
 
     groups: List[str] = []
     stroke_str = f"rgb({style.stroke_rgb[0]},{style.stroke_rgb[1]},{style.stroke_rgb[2]})"
@@ -768,7 +807,8 @@ def _load_config_session(args) -> Tuple[RenderParams, Optional[Dict], Optional[D
         paper_white_soft=p_dict.get("paper_white_soft", 20),
         scale=p_dict.get("scale", 1.0),
         separate_outline=p_dict.get("separate_outline", False),
-        naming_mode=p_dict.get("naming_mode", "inkscape")
+        naming_mode=p_dict.get("naming_mode", "inkscape"),
+        continuous_paths=p_dict.get("continuous_paths", False)
     )
     color_map = session["color_map"]
     
@@ -811,7 +851,8 @@ def _load_config_cli(args) -> Tuple[RenderParams, Optional[Dict], Optional[Dict]
         paper_white_soft=args.paper_white_soft,
         scale=args.scale,
         separate_outline=args.separate_outline,
-        naming_mode=args.naming_mode
+        naming_mode=args.naming_mode,
+        continuous_paths=args.continuous_paths
     )
     return params, marker_palette, None, args.palette_file
 
@@ -841,6 +882,8 @@ def main():
     p.add_argument("--separate-outline", action="store_true")
     p.add_argument("--palette-file", help="Path to marker palette JSON")
     p.add_argument("--naming-mode", choices=["inkscape", "flat"], default="inkscape")
+    p.add_argument("--continuous-paths", action="store_true",
+                   help="Generate continuous serpentine paths to reduce pen plotter vibration")
     p.add_argument("--save-session", action="store_true")
     p.add_argument("--use-session", help="Load previous session JSON")
 

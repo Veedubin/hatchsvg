@@ -43,6 +43,7 @@ class RenderParams:
     separate_outline: bool = False
     naming_mode: str = "inkscape"
     continuous_paths: bool = False
+    arc_radius: float = 0.0
 
 
 @dataclass
@@ -101,16 +102,8 @@ def _hatch_path_legacy(mask: np.ndarray, line_step: int) -> str:
     return " ".join(cmds)
 
 
-def hatch_path_for_mask(mask: np.ndarray, line_step: int, continuous: bool = False) -> str:
-    """Flatten all hatch segments into ONE path 'd' string.
-    
-    When continuous=True, generates serpentine paths that alternate direction
-    per row to reduce pen plotter vibration (ringing). Contiguous segments
-    within a row are connected to minimize pen lifts.
-    """
-    if not continuous:
-        return _hatch_path_legacy(mask, line_step)
-
+def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float = 0.0) -> str:
+    """Serpentine hatch path generation - rows alternate direction, segments chained with H."""
     h, _ = mask.shape
     cmds = []
     step = max(1, line_step)
@@ -136,7 +129,95 @@ def hatch_path_for_mask(mask: np.ndarray, line_step: int, continuous: bool = Fal
                 # Continue drawing - just extend to new x2
                 cmds.append(f"H{x2}")
 
+        # Phase 3: Add arc at row-end reversal (transition to next row)
+        if arc_radius > 0 and row_idx % 2 == 0:  # Even row ending, next row goes R→L
+            next_y = y + step
+            if next_y < h:
+                # Add a 180° arc at the right end to smooth the U-turn
+                # Arc sweeps from (x2, y) to (x2, next_y) bulging right
+                cmds.append(f"A {arc_radius} {arc_radius} 0 0 1 {x2} {next_y}")
+
     return " ".join(cmds)
+
+
+def _order_components_nearest_neighbor(
+    component_paths: List[str], centroids: List[Tuple[float, float]]
+) -> List[str]:
+    """Order components using greedy nearest-neighbor to minimize pen travel."""
+    if not component_paths:
+        return []
+
+    n = len(component_paths)
+    visited = [False] * n
+    ordered = []
+
+    # Start with the leftmost component
+    current = min(range(n), key=lambda i: centroids[i][0])
+    visited[current] = True
+    ordered.append(component_paths[current])
+
+    for _ in range(n - 1):
+        # Find nearest unvisited component by Euclidean distance
+        nearest = None
+        min_dist = float('inf')
+        for i in range(n):
+            if not visited[i]:
+                dist = ((centroids[current][0] - centroids[i][0]) ** 2 +
+                        (centroids[current][1] - centroids[i][1]) ** 2) ** 0.5
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest = i
+
+        visited[nearest] = True
+        ordered.append(component_paths[nearest])
+        current = nearest
+
+    return ordered
+
+
+def hatch_path_for_mask(mask: np.ndarray, line_step: int, continuous: bool = False,
+                        arc_radius: float = 0.0) -> str:
+    """Flatten all hatch segments into ONE path 'd' string.
+
+    When continuous=True, generates serpentine paths that alternate direction
+    per row to reduce pen plotter vibration (ringing). Contiguous segments
+    within a row are connected to minimize pen lifts.
+
+    Phase 2: For discontinuous regions (islands), generates separate paths
+    per connected component and orders them with nearest-neighbor TSP.
+
+    Phase 3: When arc_radius > 0, adds small arcs at row-end 180° reversals
+    to smooth transitions.
+    """
+    if not continuous:
+        return _hatch_path_legacy(mask, line_step)
+
+    # Phase 2: Find connected components
+    try:
+        from scipy.ndimage import label
+        labeled, num_features = label(mask)
+    except ImportError:
+        # Fallback: use serpentine without component splitting
+        return _hatch_path_serpentine(mask, line_step, arc_radius)
+
+    if num_features <= 1:
+        return _hatch_path_serpentine(mask, line_step, arc_radius)
+
+    # Generate path for each component
+    component_paths = []
+    centroids = []
+    for i in range(1, num_features + 1):
+        component_mask = (labeled == i)
+        path = _hatch_path_serpentine(component_mask, line_step, arc_radius)
+        component_paths.append(path)
+        # Compute centroid for ordering
+        y_coords, x_coords = np.where(component_mask)
+        centroids.append((float(np.mean(x_coords)), float(np.mean(y_coords))))
+
+    # Order components by nearest-neighbor
+    ordered_paths = _order_components_nearest_neighbor(component_paths, centroids)
+
+    return " ".join(ordered_paths)
 
 
 def border_mask(mask: np.ndarray) -> np.ndarray:
@@ -150,10 +231,11 @@ def border_mask(mask: np.ndarray) -> np.ndarray:
     return mask & ~interior
 
 
-def outline_path_for_mask(mask: np.ndarray, continuous: bool = False) -> str:
+def outline_path_for_mask(mask: np.ndarray, continuous: bool = False,
+                          arc_radius: float = 0.0) -> str:
     """Flatten all outline segments into one path string (border only)."""
     bmask = border_mask(mask)
-    return hatch_path_for_mask(bmask, line_step=1, continuous=continuous)
+    return hatch_path_for_mask(bmask, line_step=1, continuous=continuous, arc_radius=arc_radius)
 
 
 def luminance(rgb: Tuple[int, int, int]) -> float:
@@ -633,8 +715,8 @@ def _create_layer_groups(
     marker_counters: Dict[str, int]
 ) -> List[str]:
     """Generate the SVG group strings for a specific layer."""
-    d_hatch = "" if style.is_white else hatch_path_for_mask(mask, style.line_step, params.continuous_paths)
-    d_outline = outline_path_for_mask(mask, params.continuous_paths)
+    d_hatch = "" if style.is_white else hatch_path_for_mask(mask, style.line_step, params.continuous_paths, params.arc_radius)
+    d_outline = outline_path_for_mask(mask, params.continuous_paths, params.arc_radius)
 
     groups: List[str] = []
     stroke_str = f"rgb({style.stroke_rgb[0]},{style.stroke_rgb[1]},{style.stroke_rgb[2]})"
@@ -808,7 +890,8 @@ def _load_config_session(args) -> Tuple[RenderParams, Optional[Dict], Optional[D
         scale=p_dict.get("scale", 1.0),
         separate_outline=p_dict.get("separate_outline", False),
         naming_mode=p_dict.get("naming_mode", "inkscape"),
-        continuous_paths=p_dict.get("continuous_paths", False)
+        continuous_paths=p_dict.get("continuous_paths", False),
+        arc_radius=p_dict.get("arc_radius", 0.0)
     )
     color_map = session["color_map"]
     
@@ -852,7 +935,8 @@ def _load_config_cli(args) -> Tuple[RenderParams, Optional[Dict], Optional[Dict]
         scale=args.scale,
         separate_outline=args.separate_outline,
         naming_mode=args.naming_mode,
-        continuous_paths=args.continuous_paths
+        continuous_paths=args.continuous_paths,
+        arc_radius=args.arc_radius
     )
     return params, marker_palette, None, args.palette_file
 
@@ -884,6 +968,8 @@ def main():
     p.add_argument("--naming-mode", choices=["inkscape", "flat"], default="inkscape")
     p.add_argument("--continuous-paths", action="store_true",
                    help="Generate continuous serpentine paths to reduce pen plotter vibration")
+    p.add_argument("--arc-radius", type=float, default=0.0,
+                   help="Add arc smoothing at row-end 180° reversals (0 = disabled)")
     p.add_argument("--save-session", action="store_true")
     p.add_argument("--use-session", help="Load previous session JSON")
 

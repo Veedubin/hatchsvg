@@ -22,6 +22,16 @@ from PIL import Image
 from dataclasses import dataclass, field, asdict
 from typing import List, Tuple, Optional, Dict, Any
 
+# Optional Rich dependency for progress bars and stats
+try:
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+    HAS_RICH = True
+except ImportError:
+    HAS_RICH = False
+
 
 # --------------------------------------------------------------------
 # Data Structures
@@ -138,6 +148,64 @@ def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float =
                 cmds.append(f"A {arc_radius} {arc_radius} 0 0 1 {x2} {next_y}")
 
     return " ".join(cmds)
+
+
+def _count_segments_in_mask(mask: np.ndarray, line_step: int) -> int:
+    """Count total hatch segments in a mask (for stats)."""
+    h, _ = mask.shape
+    step = max(1, line_step)
+    total = 0
+    for y in range(0, h, step):
+        row = mask[y]
+        segs = find_segments_in_row(row)
+        total += len(segs)
+    return total
+
+
+def compute_layer_stats(mask: np.ndarray, line_step: int) -> Dict[str, Any]:
+    """Compute path statistics for a single layer mask.
+
+    Returns dict with:
+    - segments: total hatch segments
+    - legacy_lifts: pen lifts with legacy (left-to-right) paths
+    - optimized_lifts: pen lifts with serpentine/continuous paths
+    - component_count: number of connected components
+    - reduction_pct: percentage reduction in pen lifts
+    """
+    segments = _count_segments_in_mask(mask, line_step)
+
+    # Count legacy pen lifts (one M per segment)
+    legacy_lifts = segments
+
+    # Generate optimized path to count its pen lifts
+    # M commands are always preceded by a space or start of string
+    # The path format is "M{x} {y} H..." or "M{x} {y} A..."
+    # Count 'M' at start of a command (preceded by space or at position 0)
+    optimized_path = hatch_path_for_mask(mask, line_step, continuous=True, arc_radius=0.0)
+    # Count ' M' (space+M) or start-of-string 'M' to find pen lift commands
+    optimized_lifts = optimized_path.count(' M') + (1 if optimized_path.startswith('M') else 0)
+
+    # Count connected components
+    try:
+        from scipy.ndimage import label
+        labeled, num_features = label(mask)
+        component_count = num_features
+    except ImportError:
+        component_count = 1
+
+    # Calculate reduction percentage
+    reduction_pct = 0.0
+    if legacy_lifts > 0:
+        reduction_pct = (1 - optimized_lifts / legacy_lifts) * 100
+        reduction_pct = max(0.0, min(100.0, reduction_pct))
+
+    return {
+        'segments': segments,
+        'legacy_lifts': legacy_lifts,
+        'optimized_lifts': optimized_lifts,
+        'component_count': component_count,
+        'reduction_pct': reduction_pct,
+    }
 
 
 def _order_components_nearest_neighbor(
@@ -795,28 +863,97 @@ def process_image_to_hatched_svg(
     params: RenderParams,
     marker_palette: Optional[Dict[str, Any]] = None,
     color_map: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    show_progress: bool = False,
+    show_stats: bool = False,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Render SVG and return a color_map_used dict for session saving.
+
+    Returns:
+        Tuple of (color_map_used, processing_stats)
     """
-    img = Image.open(input_path).convert("RGBA")
+    console = Console() if HAS_RICH else None
+
+    # Stats accumulation
+    processing_stats = {
+        'image_dimensions': (0, 0),
+        'colors_detected': 0,
+        'layers_generated': 0,
+        'total_segments': 0,
+        'legacy_pen_lifts': 0,
+        'optimized_pen_lifts': 0,
+        'layer_stats': [],
+    }
+
+    def _print(msg):
+        """Print helper that works with or without Rich."""
+        if console and HAS_RICH:
+            console.print(msg)
+        else:
+            print(msg)
+
+    # Progress tracking helper
+    def _get_progress_bar():
+        if not HAS_RICH or not show_progress:
+            return None
+        return Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console,
+        )
+
+    progress = _get_progress_bar()
+    use_progress = progress is not None
+
+    # Step 1: Loading image
+    if use_progress:
+        with progress:
+            task1 = progress.add_task("[1/5] Loading image...", total=1)
+            img = Image.open(input_path).convert("RGBA")
+            progress.update(task1, completed=1)
+    else:
+        _print(f"Loading image: {input_path}")
+        img = Image.open(input_path).convert("RGBA")
 
     if abs(params.scale - 1.0) > 1e-6:
         w0, h0 = img.size
         w1 = max(1, int(w0 * params.scale))
         h1 = max(1, int(h0 * params.scale))
-        print(f"Scaling from {w0}x{h0} → {w1}x{h1}")
+        _print(f"Scaling from {w0}x{h0} → {w1}x{h1}")
         img = img.resize((w1, h1), Image.Resampling.LANCZOS)
 
     rgba = np.array(img)
     orig_rgb = rgba[:, :, :3]
     alpha = rgba[:, :, 3]
+    H, W = visible.shape if 'visible' in dir() else (rgba.shape[0], rgba.shape[1])
+    processing_stats['image_dimensions'] = (W, H)
 
-    color_idx, palette, visible = build_color_index_map(
-        orig_rgb, alpha, params.alpha_threshold, params.max_palette
-    )
+    # Step 2: Quantizing colors
+    if use_progress:
+        with progress:
+            task2 = progress.add_task("[2/5] Quantizing colors...", total=1)
+            color_idx, palette, visible = build_color_index_map(
+                orig_rgb, alpha, params.alpha_threshold, params.max_palette
+            )
+            progress.update(task2, completed=1)
+    else:
+        color_idx, palette, visible = build_color_index_map(
+            orig_rgb, alpha, params.alpha_threshold, params.max_palette
+        )
+
     used = np.unique(color_idx[visible])
-    print(f"Colors used: {len(used)}")
+    _print(f"Colors used: {len(used)}")
+    processing_stats['colors_detected'] = len(used)
+
+    # Step 3: Building color index
+    if use_progress:
+        with progress:
+            task3 = progress.add_task("[3/5] Building color index...", total=1)
+            progress.update(task3, completed=1)
+    else:
+        pass  # Already done in step 2
 
     bg_idx = None
     if params.skip_bg:
@@ -824,47 +961,114 @@ def process_image_to_hatched_svg(
 
     all_groups = []
     layers_count = 0
-    H, W = visible.shape
 
     color_map_used = {}
     marker_counters = {}
 
-    for idx in used:
-        idx_int = int(idx)
-        if idx_int < 0:
-            continue
-        if params.skip_bg and bg_idx == idx_int:
-            print(f"Skip BG idx {idx_int}")
-            continue
+    # Step 4: Processing layers
+    total_layers = len(used)
+    if use_progress:
+        with progress:
+            task4 = progress.add_task(f"[4/5] Processing layers (0/{total_layers})...", total=total_layers)
+            for i, idx in enumerate(used):
+                idx_int = int(idx)
+                if idx_int < 0:
+                    progress.update(task4, advance=1)
+                    continue
+                if params.skip_bg and bg_idx == idx_int:
+                    _print(f"Skip BG idx {idx_int}")
+                    progress.update(task4, advance=1)
+                    continue
 
-        mask = (color_idx == idx_int) & visible
-        rgb = palette[idx_int]
-        pal_hex = "#" + rgb_to_hex(rgb)
+                mask = (color_idx == idx_int) & visible
+                rgb = palette[idx_int]
+                pal_hex = "#" + rgb_to_hex(rgb)
 
-        result = _process_single_layer(
-            idx_int, rgb, mask, params, marker_counters, marker_palette, color_map
-        )
+                # Compute layer stats if requested
+                layer_stat = None
+                if show_stats:
+                    layer_stat = compute_layer_stats(mask, params.line_step)
+                    layer_stat['color_name'] = rough_color_name(rgb)
+                    layer_stat['hex'] = pal_hex
+                    processing_stats['total_segments'] += layer_stat['segments']
+                    processing_stats['legacy_pen_lifts'] += layer_stat['legacy_lifts']
+                    processing_stats['optimized_pen_lifts'] += layer_stat['optimized_lifts']
+                    processing_stats['layer_stats'].append(layer_stat)
 
-        if result.is_layer_generated and result.color_map_entry:
-            all_groups.extend(result.groups)
-            color_map_used[pal_hex] = result.color_map_entry
-            if result.groups:
-                layers_count += 1
+                result = _process_single_layer(
+                    idx_int, rgb, mask, params, marker_counters, marker_palette, color_map
+                )
+
+                if result.is_layer_generated and result.color_map_entry:
+                    all_groups.extend(result.groups)
+                    color_map_used[pal_hex] = result.color_map_entry
+                    if result.groups:
+                        layers_count += 1
+
+                progress.update(task4, description=f"[4/5] Processing layers ({i+1}/{total_layers})...", advance=1)
+    else:
+        for i, idx in enumerate(used):
+            idx_int = int(idx)
+            if idx_int < 0:
+                continue
+            if params.skip_bg and bg_idx == idx_int:
+                _print(f"Skip BG idx {idx_int}")
+                continue
+
+            mask = (color_idx == idx_int) & visible
+            rgb = palette[idx_int]
+            pal_hex = "#" + rgb_to_hex(rgb)
+
+            # Compute layer stats if requested
+            if show_stats:
+                layer_stat = compute_layer_stats(mask, params.line_step)
+                layer_stat['color_name'] = rough_color_name(rgb)
+                layer_stat['hex'] = pal_hex
+                processing_stats['total_segments'] += layer_stat['segments']
+                processing_stats['legacy_pen_lifts'] += layer_stat['legacy_lifts']
+                processing_stats['optimized_pen_lifts'] += layer_stat['optimized_lifts']
+                processing_stats['layer_stats'].append(layer_stat)
+
+            result = _process_single_layer(
+                idx_int, rgb, mask, params, marker_counters, marker_palette, color_map
+            )
+
+            if result.is_layer_generated and result.color_map_entry:
+                all_groups.extend(result.groups)
+                color_map_used[pal_hex] = result.color_map_entry
+                if result.groups:
+                    layers_count += 1
+
+    processing_stats['layers_generated'] = layers_count
 
     if layers_count == 0:
         raise SystemExit("No layers produced.")
 
-    svg = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" '
-        f'width="{W}" height="{H}" viewBox="0 0 {W} {H}">\n' +
-        "".join(all_groups) +
-        "</svg>\n"
-    )
-    output_path.write_text(svg, encoding="utf-8")
-    print(f"Saved {layers_count} color layers to {output_path} "
+    # Step 5: Writing SVG
+    if use_progress:
+        with progress:
+            task5 = progress.add_task("[5/5] Writing SVG...", total=1)
+            svg = (
+                f'<svg xmlns="http://www.w3.org/2000/svg" '
+                f'width="{W}" height="{H}" viewBox="0 0 {W} {H}">\n' +
+                "".join(all_groups) +
+                "</svg>\n"
+            )
+            output_path.write_text(svg, encoding="utf-8")
+            progress.update(task5, completed=1)
+    else:
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{W}" height="{H}" viewBox="0 0 {W} {H}">\n' +
+            "".join(all_groups) +
+            "</svg>\n"
+        )
+        output_path.write_text(svg, encoding="utf-8")
+
+    _print(f"Saved {layers_count} color layers to {output_path} "
           f"(separate_outline={params.separate_outline}, naming_mode={params.naming_mode})")
 
-    return color_map_used
+    return color_map_used, processing_stats
 
 
 # --------------------------------------------------------------------
@@ -949,6 +1153,119 @@ def get_run_configuration(args) -> Tuple[RenderParams, Optional[Dict], Optional[
         return _load_config_cli(args)
 
 
+def _display_stats_table(stats: Dict[str, Any]) -> None:
+    """Display the processing statistics table."""
+    if not HAS_RICH:
+        _display_stats_table_simple(stats)
+        return
+
+    console = Console()
+
+    # Calculate derived stats
+    total_segments = stats.get('total_segments', 0)
+    legacy_lifts = stats.get('legacy_pen_lifts', 0)
+    optimized_lifts = stats.get('optimized_pen_lifts', 0)
+    layers = stats.get('layers_generated', 0)
+    w, h = stats.get('image_dimensions', (0, 0))
+    colors = stats.get('colors_detected', 0)
+
+    # Calculate lift reduction
+    reduction_pct = 0.0
+    if legacy_lifts > 0:
+        reduction_pct = (1 - optimized_lifts / legacy_lifts) * 100
+
+    # Estimate plot times (conservative: 0.1s per pen lift, 0.02s per segment draw)
+    legacy_time = (legacy_lifts * 0.1) + (total_segments * 0.02)
+    optimized_time = (optimized_lifts * 0.1) + (total_segments * 0.02)
+    time_saved = legacy_time - optimized_time
+    time_saved_pct = (time_saved / legacy_time * 100) if legacy_time > 0 else 0
+
+    # Main stats table
+    table = Table(title="Processing Statistics", show_header=True, header_style="bold magenta")
+    table.add_column("Statistic", style="cyan", width=30)
+    table.add_column("Value", style="green", width=20)
+
+    table.add_row("Image Dimensions", f"{w} x {h}")
+    table.add_row("Colors Detected", str(colors))
+    table.add_row("Layers Generated", str(layers))
+    table.add_row("Total Segments", f"{total_segments:,}")
+    table.add_row("Pen Lifts (legacy)", f"{legacy_lifts:,}")
+    table.add_row("Pen Lifts (optimized)", f"{optimized_lifts:,}")
+    table.add_row("Pen Lift Reduction", f"{reduction_pct:.1f}%")
+    table.add_row("Estimated Plot Time (legacy)", f"~{legacy_time/60:.1f} min")
+    table.add_row("Estimated Plot Time (optimized)", f"~{optimized_time/60:.1f} min")
+    table.add_row("Time Saved", f"~{time_saved/60:.1f} min ({time_saved_pct:.0f}%)")
+
+    console.print(Panel(table, title="[bold]Processing Statistics[/bold]", expand=False))
+
+    # Per-layer breakdown if available
+    layer_stats = stats.get('layer_stats', [])
+    if layer_stats:
+        layer_table = Table(title="Layer Breakdown", show_header=True, header_style="bold cyan")
+        layer_table.add_column("Layer", style="white", width=15)
+        layer_table.add_column("Segments", justify="right", style="yellow")
+        layer_table.add_column("Pen Lifts (opt)", justify="right", style="green")
+        layer_table.add_column("Components", justify="right", style="blue")
+        layer_table.add_column("Reduction", justify="right", style="magenta")
+
+        for ls in layer_stats:
+            layer_table.add_row(
+                f"{ls.get('color_name', 'unknown')} ({ls.get('hex', '#000000')})",
+                f"{ls.get('segments', 0):,}",
+                f"{ls.get('optimized_lifts', 0):,}",
+                f"{ls.get('component_count', 0):,}",
+                f"{ls.get('reduction_pct', 0):.1f}%"
+            )
+
+        console.print(Panel(layer_table, title="[bold]Layer Breakdown[/bold]", expand=False))
+
+
+def _display_stats_table_simple(stats: Dict[str, Any]) -> None:
+    """Display stats using simple print formatting (when Rich is not available)."""
+    total_segments = stats.get('total_segments', 0)
+    legacy_lifts = stats.get('legacy_pen_lifts', 0)
+    optimized_lifts = stats.get('optimized_pen_lifts', 0)
+    layers = stats.get('layers_generated', 0)
+    w, h = stats.get('image_dimensions', (0, 0))
+    colors = stats.get('colors_detected', 0)
+
+    reduction_pct = 0.0
+    if legacy_lifts > 0:
+        reduction_pct = (1 - optimized_lifts / legacy_lifts) * 100
+
+    legacy_time = (legacy_lifts * 0.1) + (total_segments * 0.02)
+    optimized_time = (optimized_lifts * 0.1) + (total_segments * 0.02)
+    time_saved = legacy_time - optimized_time
+    time_saved_pct = (time_saved / legacy_time * 100) if legacy_time > 0 else 0
+
+    print("\n" + "=" * 50)
+    print("Processing Statistics")
+    print("=" * 50)
+    print(f"  Image Dimensions:     {w} x {h}")
+    print(f"  Colors Detected:       {colors}")
+    print(f"  Layers Generated:      {layers}")
+    print(f"  Total Segments:        {total_segments:,}")
+    print(f"  Pen Lifts (legacy):    {legacy_lifts:,}")
+    print(f"  Pen Lifts (optimized): {optimized_lifts:,}")
+    print(f"  Pen Lift Reduction:   {reduction_pct:.1f}%")
+    print(f"  Est. Plot Time (leg):  ~{legacy_time/60:.1f} min")
+    print(f"  Est. Plot Time (opt):  ~{optimized_time/60:.1f} min")
+    print(f"  Time Saved:            ~{time_saved/60:.1f} min ({time_saved_pct:.0f}%)")
+    print("=" * 50)
+
+    layer_stats = stats.get('layer_stats', [])
+    if layer_stats:
+        print("\nLayer Breakdown:")
+        print("-" * 70)
+        print(f"{'Layer':<20} {'Segments':>10} {'Pen Lifts':>10} {'Components':>12} {'Reduction':>10}")
+        print("-" * 70)
+        for ls in layer_stats:
+            name = f"{ls.get('color_name', 'unknown')} ({ls.get('hex', '#000000')})"
+            print(f"{name:<20} {ls.get('segments', 0):>10,} {ls.get('optimized_lifts', 0):>10,} "
+                  f"{ls.get('component_count', 0):>12,} {ls.get('reduction_pct', 0):>9.1f}%")
+        print("-" * 70)
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("input")
@@ -972,23 +1289,35 @@ def main():
                    help="Add arc smoothing at row-end 180° reversals (0 = disabled)")
     p.add_argument("--save-session", action="store_true")
     p.add_argument("--use-session", help="Load previous session JSON")
+    p.add_argument("--progress", action="store_true", help="Show progress bars (requires rich)")
+    p.add_argument("--stats", action="store_true", help="Show processing statistics")
 
     a = p.parse_args()
 
+    # Check for Rich if --progress is requested
+    if a.progress and not HAS_RICH:
+        print("Warning: --progress requires 'rich' package. Install with: pip install rich")
+
     input_path = Path(a.input)
     output_path = Path(a.output_svg)
-    
+
     # Load configuration
     params, marker_palette, color_map, palette_file = get_run_configuration(a)
 
     # Run Process
-    color_map_used = process_image_to_hatched_svg(
+    color_map_used, processing_stats = process_image_to_hatched_svg(
         input_path,
         output_path,
         params,
         marker_palette,
-        color_map
+        color_map,
+        show_progress=a.progress,
+        show_stats=a.stats
     )
+
+    # Display stats if requested
+    if a.stats:
+        _display_stats_table(processing_stats)
 
     if a.save_session:
         session_out_path = output_path.with_suffix(output_path.suffix + ".session.json")

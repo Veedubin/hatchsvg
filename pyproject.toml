@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "png2svg"
+version = "1.0.0"
+description = "Convert PNG images to hatched SVG files for Cricut pen plotters"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "png2svg contributors", email = "contributors@png2svg.dev"}
+]
+keywords = ["cricut", "pen-plotter", "svg", "hatching", "png-to-svg"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+]
+dependencies = [
+    "numpy>=1.20",
+    "pillow>=9.0",
+]
+
+[project.optional-dependencies]
+plot = ["rich>=13.0", "scipy>=1.7"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.1"]
+
+[project.scripts]
+png2svg = "png2svg.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/png2svg/png2svg"
+Repository = "https://github.com/png2svg/png2svg.git"
+Issues = "https://github.com/png2svg/png2svg/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/png2svg"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"color_palettes" = "png2svg/data/palettes"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+# Insert `src/` at the front of sys.path so the installed `png2svg` package
+# (under src/png2svg/) wins over any legacy `png2svg.py` script in the repo
+# root. The script is kept as a reference but does not shadow the package.
+pythonpath = ["src"]
+addopts = "-v --tb=short --cov=png2svg --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src/png2svg"]
+omit = ["*/tests/*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from png2svg.core import RenderParams, save_session, load_session
+from png2svg.core import RenderParams, load_session, save_session
 
 
 def test_save_and_load_session_roundtrip(tmp_path):

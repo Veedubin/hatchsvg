@@ -1,0 +1,148 @@
+"""Tests for the preset-aware CLI configuration loading."""
+
+import argparse
+
+import pytest
+
+from png2svg.core import get_run_configuration
+
+
+def _make_args(**overrides):
+    """Build a minimal argparse Namespace matching the CLI's attribute names.
+
+    The CLI attaches the parser as ``_png2svg_parser`` so core can diff explicit
+    args. We mirror that contract here. Defaults come from the CLI's argparse
+    spec (see ``src/png2svg/cli.py``).
+    """
+    defaults = {
+        "input": "in.png",
+        "output_svg": "out.svg",
+        "preset": None,
+        "max_palette": 12,
+        "line_step": 4,
+        "alpha_threshold": 10,
+        "min_pixels": 200,
+        "stroke_width": None,
+        "outline_width": None,
+        "no_skip_background": False,
+        "white_medium": False,
+        "paper_white_soft": 20,
+        "scale": 1.0,
+        "separate_outline": False,
+        "palette_file": None,
+        "naming_mode": "inkscape",
+        "continuous_paths": False,
+        "arc_radius": 0.0,
+        "save_session": False,
+        "use_session": None,
+        "progress": False,
+        "stats": False,
+    }
+    defaults.update(overrides)
+
+    # Build a real parser so _extract_explicit_args can introspect defaults
+    import sys
+
+    if "png2svg.cli" in sys.modules:
+        from png2svg.cli import main as _cli_main  # noqa: F401
+
+    p = argparse.ArgumentParser()
+    p.add_argument("input")
+    p.add_argument("output_svg")
+    p.add_argument("--preset", default=None)
+    p.add_argument("--max-palette", type=int, default=12)
+    p.add_argument("--line-step", type=int, default=4)
+    p.add_argument("--alpha-threshold", type=int, default=10)
+    p.add_argument("--min-pixels", type=int, default=200)
+    p.add_argument("--stroke-width", type=float, default=None)
+    p.add_argument("--outline-width", type=float, default=None)
+    p.add_argument("--no-skip-background", action="store_true")
+    p.add_argument("--white-medium", action="store_true")
+    p.add_argument("--paper-white-soft", type=int, default=20)
+    p.add_argument("--scale", type=float, default=1.0)
+    p.add_argument("--separate-outline", action="store_true")
+    p.add_argument("--palette-file", default=None)
+    p.add_argument("--naming-mode", choices=["inkscape", "flat"], default="inkscape")
+    p.add_argument("--continuous-paths", action="store_true")
+    p.add_argument("--arc-radius", type=float, default=0.0)
+    p.add_argument("--save-session", action="store_true")
+    p.add_argument("--use-session", default=None)
+    p.add_argument("--progress", action="store_true")
+    p.add_argument("--stats", action="store_true")
+
+    args = argparse.Namespace(**defaults)
+    args._png2svg_parser = p
+    return args
+
+
+def test_no_preset_no_explicit_args_uses_defaults():
+    """Without --preset and without explicit flags, RenderParams uses its own defaults."""
+    args = _make_args()
+    params, _, _, _ = get_run_configuration(args, preset_name=None)
+    assert params.max_palette == 12  # RenderParams default
+    assert params.line_step == 4
+    assert params.continuous_paths is False
+
+
+def test_preset_alone_applies_all_preset_values():
+    """With only --preset logo, all preset values flow through."""
+    args = _make_args(preset="logo")
+    params, _, _, _ = get_run_configuration(args, preset_name="logo")
+    assert params.max_palette == 6  # logo preset value
+    assert params.line_step == 5
+    assert params.separate_outline is True
+    assert params.continuous_paths is True
+    assert params.arc_radius == 3.0
+
+
+def test_explicit_flag_overrides_preset():
+    """--preset logo --line-step 2 should keep max_palette=6 (preset) but line_step=2 (explicit)."""
+    args = _make_args(preset="logo", line_step=2)
+    params, _, _, _ = get_run_configuration(args, preset_name="logo")
+    assert params.line_step == 2, "explicit --line-step should override preset"
+    assert params.max_palette == 6, "non-explicit field should fall back to preset"
+    assert params.separate_outline is True
+
+
+def test_preset_unknown_name_raises_value_error():
+    """An unknown preset name should raise ValueError with a helpful message."""
+    args = _make_args(preset="nonexistent")
+    with pytest.raises(ValueError, match="Unknown preset"):
+        get_run_configuration(args, preset_name="nonexistent")
+
+
+def test_explicit_max_palette_overrides_preset():
+    """--preset portrait --max-palette 4 should give max_palette=4, not 8 (preset default)."""
+    args = _make_args(preset="portrait", max_palette=4)
+    params, _, _, _ = get_run_configuration(args, preset_name="portrait")
+    assert params.max_palette == 4
+    # Other preset values still apply
+    assert params.white_medium is True
+    assert params.continuous_paths is True
+
+
+def test_explicit_continuous_paths_overrides_preset_off():
+    """--preset fast --continuous-paths should turn on continuous_paths (fast preset has it off)."""
+    args = _make_args(preset="fast", continuous_paths=True)
+    params, _, _, _ = get_run_configuration(args, preset_name="fast")
+    assert params.continuous_paths is True
+    assert params.line_step == 8  # non-explicit; from preset
+
+
+def test_use_session_ignores_preset():
+    """--use-session encodes the full config, so --preset is ignored."""
+    # We can't easily test the session path here without a real session file,
+    # but we can verify that the function dispatches to _load_config_session
+    # when use_session is set. Easiest check: pass a fake path and expect a
+    # FileNotFoundError from the session loader, NOT a ValueError from the
+    # preset path.
+    args = _make_args(use_session="/nonexistent/session.json", preset="logo")
+    with pytest.raises(FileNotFoundError):
+        get_run_configuration(args, preset_name="logo")
+
+
+def test_no_skip_background_explicit_overrides_preset_skip_bg():
+    """--no-skip-background should set skip_bg=False even if the preset didn't touch it."""
+    args = _make_args(preset="portrait", no_skip_background=True)
+    params, _, _, _ = get_run_configuration(args, preset_name="portrait")
+    assert params.skip_bg is False  # --no-skip-background wins

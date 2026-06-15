@@ -12,6 +12,7 @@ from png2svg.core import (
     process_image_to_hatched_svg,
     save_session,
 )
+from png2svg.presets import PRESETS, list_presets
 
 _ERROR_HINTS = {
     "No layers produced.": (
@@ -25,15 +26,45 @@ _ERROR_HINTS = {
     ),
 }
 
+# Input formats Pillow can open (the actual decode happens in core.py via PIL.Image.open)
+SUPPORTED_INPUT_FORMATS = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".bmp",
+    ".gif",
+    ".tiff",
+    ".tif",
+)
+
 
 def main():
     """Entry point for the `png2svg` console script."""
+    formats_help = " | ".join(SUPPORTED_INPUT_FORMATS)
     p = argparse.ArgumentParser(
         prog="png2svg",
-        description="Convert PNG images to hatched SVG files for Cricut pen plotters.",
+        description=(
+            f"Convert images to hatched SVG files for Cricut pen plotters. Accepts input formats: {formats_help}."
+        ),
+        epilog=(
+            "Presets:\n"
+            + "\n".join(f"  {name}: {spec['description']}" for name, spec in sorted(PRESETS.items()))
+            + "\n\nUse --help for the full list of flags."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("input", help="Path to input PNG image")
+    p.add_argument("input", help=f"Path to input image ({formats_help})")
     p.add_argument("output_svg", help="Path to output SVG file")
+    p.add_argument(
+        "--preset",
+        choices=list_presets(),
+        default=None,
+        help=(
+            "Named preset for common use cases (portrait, logo, line-art, photo, sketch, fast). "
+            "Preset values are applied first, then any explicit flags override them."
+        ),
+    )
     p.add_argument(
         "--version",
         action="version",
@@ -131,6 +162,10 @@ def main():
 
     a = p.parse_args()
 
+    # Attach the parser to args so core._extract_explicit_args can diff
+    # explicit CLI flags against parser defaults (used by --preset).
+    a._png2svg_parser = p  # type: ignore[attr-defined]
+
     # Check for Rich if --progress is requested
     if a.progress and not HAS_RICH:
         print("Warning: --progress requires 'rich' package. Install with: pip install rich")
@@ -138,9 +173,24 @@ def main():
     input_path = Path(a.input)
     output_path = Path(a.output_svg)
 
-    # Load configuration — wrap with friendly error handling
+    # Validate input format early with a friendly hint before Pillow tries to open it
+    if input_path.suffix.lower() not in SUPPORTED_INPUT_FORMATS:
+        print(
+            f"Error: unsupported input format '{input_path.suffix}'.",
+            file=sys.stderr,
+        )
+        print(
+            f"Supported formats: {', '.join(SUPPORTED_INPUT_FORMATS)}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Load configuration — wrap with friendly error handling.
+    # If --preset is set, the preset's overrides are applied as a base, then
+    # any explicit CLI flags on top of it. So `png2svg img out --preset logo
+    # --line-step 2` gives a logo preset with line_step=2.
     try:
-        params, marker_palette, color_map, palette_file = get_run_configuration(a)
+        params, marker_palette, color_map, palette_file = get_run_configuration(a, preset_name=a.preset)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         print(

@@ -5,6 +5,30 @@
 
 ## In Progress
 
+### Week 2 Polish ✅ COMPLETE (2026-06-15)
+
+All Week 2 deliverables shipped on branch `v1.0.0-release` (continuing the same
+branch from Week 1):
+
+- [x] **Multi-format input** — CLI now accepts `.png`, `.jpg`, `.jpeg`,
+      `.webp`, `.bmp`, `.gif`, `.tiff`, `.tif` with friendly error on
+      unsupported formats
+- [x] **Named presets** — `--preset portrait|logo|line-art|photo|sketch|fast`;
+      explicit CLI flags override preset values (8 new tests in
+      `test_preset_config.py` + 13 in `test_presets.py`)
+- [x] **`png2svg.presets` module** — typed `PRESETS` dict with 6 hand-tuned
+      presets, `list_presets()`, `get_preset()`, `apply_preset()` (100%
+      covered)
+- [x] **`examples/` directory** — `scene.png` (procedural 200×200 input) + 4
+      output SVGs (fast/portrait/logo/sketch) + `examples/README.md`
+- [x] **README rewrite** — quickstart above the install block, comparison
+      table vs potrace/vtracer/Inkscape, full CLI flag table, 5+ Cookbook
+      recipes, updated project structure
+- [x] **21 new tests** — 13 in `test_presets.py`, 8 in
+      `test_preset_config.py`, 8 in `tests/integration/test_cli.py`
+- [x] **60 total tests** (up from 27); coverage 49% → 55%
+- [x] All quality gates pass: `ruff check`, `ruff format`, `pytest -q`
+
 ### Week 1 Hardening ✅ COMPLETE (2026-06-15)
 
 All Week 1 deliverables shipped on branch `v1.0.0-release`:
@@ -32,22 +56,11 @@ All Week 1 deliverables shipped on branch `v1.0.0-release`:
 - [ ] Validate arc smoothing with `--arc-radius` produces smooth U-turns
 - [ ] Confirm pen lift reduction improves drawing speed
 
-## Next Up (Week 2)
-
-### README Rewrite & Presets
-
-- [ ] Full README rewrite per [REVIEW.md §6](./REVIEW.md):
-  - Hero GIF showing input → output
-  - Gallery (3-5 example pairs)
-  - Comparison table vs alternatives
-  - Quickstart above the install block
-- [ ] Named presets: `--preset portrait`, `--preset logo`, `--preset line-art`
-- [ ] Multi-format input: accept JPG / WebP / BMP / GIF / TIFF (Pillow handles all)
-- [ ] `examples/` directory with sample input/output pairs
+## Next Up (Week 3)
 
 ### Module Split (refactor of `core.py`)
 
-The 700-line `core.py` is functional but monolithic. Week 2 splits it into:
+The 700-line `core.py` is functional but monolithic. Week 3 splits it into:
 
 - `src/png2svg/color.py` — palette loading, color matching, naming
 - `src/png2svg/path.py` — hatch path generation, components, arcs
@@ -58,6 +71,13 @@ The 700-line `core.py` is functional but monolithic. Week 2 splits it into:
 - `src/png2svg/core.py` — orchestration / `process_image_to_hatched_svg`
 
 Tests are now in place to verify the refactor is non-breaking.
+
+### README Polish (Week 2 leftover)
+
+- [ ] Add a hero GIF showing input → output (requires a screen recorder or
+      external tool)
+- [ ] Add 3-5 real photo examples (vs the procedural scene)
+- [ ] Add a "When NOT to use png2svg" section
 
 ## Backlog
 
@@ -97,7 +117,7 @@ Tests are now in place to verify the refactor is non-breaking.
 - [x] Add processing statistics with `--stats` flag
 - [x] Quality gates for all changes (ruff, mypy-free, pytest)
 
-## Quality Status (as of 2026-06-15)
+## Quality Status (as of 2026-06-15, end of Week 2)
 
 | Gate | Status |
 |------|--------|
@@ -106,11 +126,17 @@ Tests are now in place to verify the refactor is non-breaking.
 | `pip install -e ".[dev]"` succeeds | ✅ |
 | `png2svg --version` prints `png2svg 1.0.0` | ✅ |
 | `python -m png2svg --version` works | ✅ |
-| `pytest tests/` passes all 27 tests | ✅ |
+| `pytest tests/` passes all 60 tests (was 27 in Week 1) | ✅ |
 | `ruff check src tests` clean | ✅ |
 | `ruff format` clean | ✅ |
 | `.github/workflows/ci.yml` valid YAML | ✅ (6 matrix jobs) |
-| Git history clean (7 conventional commits) | ✅ |
+| Git history clean (conventional commits) | ✅ |
+| Coverage | 55% (up from 49% in Week 1) |
+| `png2svg.presets` coverage | 100% |
+| Multi-format input (JPG/WebP/BMP/GIF/TIFF) | ✅ tested |
+| Named presets (6) | ✅ tested |
+| `--version` flag | ✅ |
+| `python -m png2svg` | ✅ |
 
 ## Resume Instructions
 

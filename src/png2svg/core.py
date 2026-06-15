@@ -1138,12 +1138,153 @@ def _load_config_cli(args) -> Tuple[RenderParams, Optional[Dict], Optional[Dict]
     return params, marker_palette, None, args.palette_file
 
 
-def get_run_configuration(args) -> Tuple[RenderParams, Optional[Dict], Optional[Dict], Optional[str]]:
-    """Determine the runtime configuration based on arguments."""
+def get_run_configuration(
+    args, preset_name: Optional[str] = None
+) -> Tuple[RenderParams, Optional[Dict], Optional[Dict], Optional[str]]:
+    """Determine the runtime configuration based on arguments.
+
+    Parameters
+    ----------
+    args
+        Parsed argparse ``Namespace`` (or any object exposing the same
+        attribute names).
+    preset_name
+        Optional name of a :mod:`png2svg.presets` entry. Preset values are
+        applied as a base; any explicit CLI flags override them. Ignored when
+        ``args.use_session`` is set, since session files already encode the
+        full configuration.
+    """
     if args.use_session:
         return _load_config_session(args)
+    if preset_name:
+        return _load_config_cli_with_preset(args, preset_name)
+    return _load_config_cli(args)
+
+
+def _load_config_cli_with_preset(
+    args, preset_name: str
+) -> Tuple[RenderParams, Optional[Dict], Optional[Dict], Optional[str]]:
+    """Build a config from CLI args with a named preset as the base layer.
+
+    Strategy: snapshot the user's explicit CLI values first, then overlay the
+    preset's defaults for any field the user did NOT explicitly set. This
+    means ``--preset logo --line-step 2`` produces a logo preset whose
+    ``line_step`` is 2 (overridden) and whose ``max_palette`` is 6 (from
+    preset, since the user didn't pass ``--max-palette``).
+    """
+    from png2svg.presets import PRESETS
+
+    if preset_name not in PRESETS:
+        raise ValueError(f"Unknown preset '{preset_name}'. Available: {', '.join(sorted(PRESETS.keys()))}")
+
+    spec = PRESETS[preset_name]
+    # Build a snapshot of the user's explicit CLI values for RenderParams fields.
+    # Any field the user touched keeps its value; any field they didn't touch
+    # falls back to the preset's value.
+    explicit = _extract_explicit_args(args)
+
+    # Merge: preset values are defaults; explicit values win.
+    merged: Dict[str, Any] = {}
+    for key, value in spec.items():
+        if key == "description":
+            continue
+        merged[key] = value
+    for key, value in explicit.items():
+        merged[key] = value
+
+    # Build RenderParams from the merged dict. This is the only safe way to
+    # set a mix of preset defaults + explicit overrides without re-argparsing.
+    params = RenderParams(
+        max_palette=merged.get("max_palette", 12),
+        line_step=merged.get("line_step", 4),
+        alpha_threshold=merged.get("alpha_threshold", 10),
+        min_pixels=merged.get("min_pixels", 200),
+        stroke_width=merged.get("stroke_width", 0.5),
+        outline_width=merged.get("outline_width", 0.8),
+        skip_bg=merged.get("skip_bg", False),
+        white_medium=merged.get("white_medium", False),
+        paper_white_soft=merged.get("paper_white_soft", 20),
+        scale=merged.get("scale", 1.0),
+        separate_outline=merged.get("separate_outline", False),
+        naming_mode=merged.get("naming_mode", "inkscape"),
+        continuous_paths=merged.get("continuous_paths", False),
+        arc_radius=merged.get("arc_radius", 0.0),
+    )
+
+    # Load palette if provided (not affected by preset)
+    marker_palette = None
+    if args.palette_file:
+        marker_palette = load_marker_palette(Path(args.palette_file))
+
+    # Recompute stroke/outline widths the same way _load_config_cli does
+    sw = params.stroke_width
+    if sw == 0.5 and marker_palette and "tip_width_mm" in marker_palette:
+        # 0.5 is the RenderParams default; only override if user didn't pass --stroke-width
+        if "stroke_width" not in explicit:
+            sw = float(marker_palette["tip_width_mm"])
+    if params.outline_width == 0.8 and "outline_width" not in explicit:
+        params = RenderParams(**{**params.__dict__, "stroke_width": sw, "outline_width": max(1.0, sw * 1.6)})
     else:
-        return _load_config_cli(args)
+        params = RenderParams(**{**params.__dict__, "stroke_width": sw})
+
+    return params, marker_palette, None, args.palette_file
+
+
+def _extract_explicit_args(args) -> Dict[str, Any]:
+    """Return a dict of CLI args the user explicitly set on the command line.
+
+    Compares each attribute of ``args`` against the corresponding argparse
+    action's default. Anything that differs is treated as explicit. For
+    store_true flags, presence (value=True) is explicit; absence is not.
+
+    The parser instance must be attached to ``args`` as ``_png2svg_parser``
+    (the CLI does this so we don't have to walk the call stack).
+
+    Returns
+    -------
+    dict
+        Mapping of ``RenderParams`` field name to value, containing only the
+        fields the user touched. Field names are normalized to ``RenderParams``
+        field names (e.g. ``--no-skip-background`` becomes ``skip_bg``).
+    """
+    import argparse as _argparse
+
+    parser = getattr(args, "_png2svg_parser", None)
+    explicit: Dict[str, Any] = {}
+    if parser is None:
+        return explicit
+
+    for action in parser._actions:
+        if not isinstance(action, _argparse.Action):
+            continue
+        if action.dest in ("help", "version", "input", "output_svg", "preset"):
+            continue
+        if not action.option_strings:
+            continue
+        try:
+            current = getattr(args, action.dest)
+        except AttributeError:
+            continue
+        # Normalize: --no-skip-background sets args.no_skip_background=True but
+        # means skip_bg=False on RenderParams.
+        if action.dest == "no_skip_background" and current is True:
+            explicit["skip_bg"] = False
+            continue
+        # store_true: explicit iff True
+        if isinstance(action, _argparse._StoreTrueAction):
+            if current is True:
+                explicit[action.dest] = current
+            continue
+        # store_false: explicit iff False
+        if isinstance(action, _argparse._StoreFalseAction):
+            if current is False:
+                explicit[action.dest] = current
+            continue
+        # Anything else: explicit iff different from default
+        if current != action.default:
+            explicit[action.dest] = current
+
+    return explicit
 
 
 def _display_stats_table(stats: Dict[str, Any]) -> None:

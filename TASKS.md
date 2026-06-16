@@ -5,6 +5,26 @@
 
 ## In Progress
 
+### v1.1.0 Release ✅ COMPLETE (2026-06-16)
+
+- [x] **Decided version: 1.1.0** (additive changes, no bug fixes — SemVer minor)
+- [x] **Bumped `__version__` to 1.1.0** in `src/png2svg/__init__.py`
+- [x] **Finalized CHANGELOG.md** — `[1.1.0] - 2026-06-16` (dated, deduplicated
+      footer link)
+- [x] **Fixed `test_cli_version`** to import `png2svg.__version__` instead
+      of hardcoding the version string (no more stale-test failure on bump)
+- [x] **Quality gates at tag time**:
+  - `ruff check src tests`: clean
+  - `ruff format --check src tests`: clean
+  - `pytest`: 70/70 pass, coverage 58%
+  - `bash scripts/verify_notebooks.sh`: 3/3 notebooks execute, 0 errors
+- [x] **Tagged `v1.1.0`** (annotated, at `e800c2c`)
+- [x] **Tagged `v1.0.0`** (annotated, retroactive at `6e7f3f7` — the v1.0.0
+      commit boundary that was never actually tagged when v1.0.0 shipped)
+- [ ] **PUSH DEFERRED TO USER** — no remote configured; user chose "ship locally"
+      in the question dialog
+- [ ] **Merge `v1.0.0-release` → `main`** (next session, big body of work)
+
 ### Notebook Suite ✅ COMPLETE (2026-06-15)
 
 All three tutorial notebooks shipped in `notebooks/`, end-to-end tested:

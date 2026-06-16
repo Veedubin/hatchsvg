@@ -1,7 +1,76 @@
-# png2svg Handoff — 2026-06-15 (Notebook Suite)
+# png2svg Handoff — 2026-06-16 (v1.1.0 Release)
 
 > **Session log**: This file accumulates across sessions. Newest content is
-> at the top. The full Week 1 and Week 2 handoffs are preserved below for reference.
+> at the top. The full Week 1, Week 2, and Notebook Suite handoffs are
+> preserved below for reference.
+
+## v1.1.0 Release Session Summary (2026-06-16)
+
+Tagged **v1.1.0** and **v1.0.0** (retroactive). No remote configured, so
+push is deferred to the user. The release is shippable from this branch
+the moment a remote is added.
+
+### What Shipped (1 commit, 1 tag)
+
+| Commit | Description |
+|--------|-------------|
+| `e800c2c` | `chore(release): bump version to 1.1.0` |
+
+- Bumped `__version__` to 1.1.0
+- Finalized `[1.1.0] - 2026-06-16` entry in CHANGELOG.md
+- Fixed `test_cli_version` to import `png2svg.__version__` instead of
+  hardcoding `1.0.0` (test was breaking on the very first commit, but
+  never noticed because previous session didn't run the full suite)
+- Tagged `v1.1.0` (annotated) at `e800c2c` and `v1.0.0` (annotated)
+  retroactively at `6e7f3f7` — both have release-note messages
+
+### Why 1.1.0, Not 1.0.1
+
+Per SemVer, a **patch** is bug fixes only; a **minor** is backwards-
+compatible new features. Everything in the unreleased changelog is
+additive:
+
+- Named presets (new flag, new module)
+- Multi-format input (new supported extensions)
+- 3 tutorial notebooks + helpers (new user-facing artifacts)
+- `[notebook]` extra (new optional dep group)
+- 39 new tests (60 → 70)
+- README rewrite (docs only)
+
+No bug fixes, no breaking changes. Textbook minor bump.
+
+### Quality Gates at Tag Time
+
+- `ruff check src tests`: clean
+- `ruff format --check src tests`: 20 files clean
+- `pytest`: **70/70 pass in ~40s**, coverage 58%
+- `bash scripts/verify_notebooks.sh`: all 3 notebooks execute end-to-end
+  with 0 errors
+
+### What's NOT in This Release
+
+I deliberately did **not** commit the following working-tree noise, which
+is unrelated to v1.1.0:
+
+- `.opencode/` (Boomerang plugin sync, 14 files modified)
+- `AGENTS.md` (plugin roster changes)
+- `memory_data/memories.lance/` (memini-ai transaction churn)
+- `REVIEW.md` and `PLAN.md` (untracked Boomerang session artifacts)
+
+These should be committed in a separate "chore: sync Boomerang plugin"
+commit before/after the release, **not** as part of the v1.1.0 tag.
+
+### Next Steps (Pending User)
+
+1. **Add a remote** (`git remote add origin <URL>`)
+2. **Push the branch**: `git push -u origin v1.0.0-release`
+3. **Push the tag**: `git push origin v1.0.0 v1.1.0`
+4. **Create GitHub Release** for v1.1.0 with the tag's annotation text
+   (or use the CHANGELOG entry)
+5. **Merge v1.0.0-release → main** when ready (this is a big body of
+   work — 11 commits since the v1.0.0 cutoff)
+
+## Notebook Suite Session Summary (2026-06-15)
 
 ## Notebook Suite Session Summary (2026-06-15)
 

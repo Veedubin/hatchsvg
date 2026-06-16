@@ -170,3 +170,88 @@ def test_cli_accepts_jpg_input(tmp_path):
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert out_svg.exists()
+
+
+def test_cli_save_session_roundtrip(small_test_png, tmp_path):
+    """`png2svg --save-session` writes a session JSON, --use-session reproduces it."""
+    import json
+
+    out_svg = tmp_path / "first.svg"
+    # The CLI names the session file "<output>.session.json" (e.g.
+    # "first.svg.session.json"). See src/png2svg/cli.py:242.
+    session_path = tmp_path / "first.svg.session.json"
+
+    # First run: render + save session
+    result = subprocess.run(
+        [
+            str(VENV_PNG2SVG),
+            str(small_test_png),
+            str(out_svg),
+            "--preset",
+            "fast",
+            "--save-session",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"first run stderr: {result.stderr}"
+    assert session_path.exists(), f"session JSON was not written at {session_path}"
+
+    session = json.loads(session_path.read_text())
+    assert "image" in session or "input_basename" in session
+    assert "params" in session
+    assert "color_map" in session
+
+    # Second run: re-render using the saved session
+    out_svg2 = tmp_path / "second.svg"
+    result = subprocess.run(
+        [
+            str(VENV_PNG2SVG),
+            str(small_test_png),
+            str(out_svg2),
+            "--use-session",
+            str(session_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"second run stderr: {result.stderr}"
+    assert out_svg2.exists()
+
+
+def test_cli_missing_input_file(tmp_path):
+    """`png2svg /nonexistent.png out.svg` exits 1 with a friendly error."""
+    fake = tmp_path / "does_not_exist.png"
+    out_svg = tmp_path / "out.svg"
+    result = subprocess.run(
+        [str(VENV_PNG2SVG), str(fake), str(out_svg)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    # The error message should mention the missing file or "not found"
+    err = result.stderr.lower()
+    assert "not found" in err or "no such file" in err or "does not exist" in err
+
+
+def test_cli_stats_flag_runs(small_test_png, tmp_path):
+    """`png2svg --stats` runs successfully and prints stats to stderr."""
+    out_svg = tmp_path / "out.svg"
+    result = subprocess.run(
+        [
+            str(VENV_PNG2SVG),
+            str(small_test_png),
+            str(out_svg),
+            "--preset",
+            "fast",
+            "--stats",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert out_svg.exists()

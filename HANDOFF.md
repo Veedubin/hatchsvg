@@ -1,8 +1,100 @@
-# png2svg Handoff — 2026-06-16 (v1.1.0 Release)
+# png2svg Handoff — 2026-06-16 (Post-release housekeeping)
 
 > **Session log**: This file accumulates across sessions. Newest content is
-> at the top. The full Week 1, Week 2, and Notebook Suite handoffs are
-> preserved below for reference.
+> at the top. Earlier v1.1.0 release session is preserved below.
+
+## Post-release Housekeeping Session (2026-06-16)
+
+Two follow-up commits on top of v1.1.0, addressing accidental-commit
+risk and notebook reproducibility.
+
+### What Shipped (2 commits)
+
+| Commit | Description |
+|--------|-------------|
+| `b017674` | `chore: stop tracking Boomerang plugin artifacts and session files` |
+| `3686b28` | `fix(notebooks): make executed notebooks byte-identical on re-execution` |
+
+### Commit `b017674` — Untrack the noise
+
+The user noticed that `.opencode/`, `AGENTS.md`, `memory_data/`,
+`REVIEW.md`, and `PLAN.md` could accidentally be committed by a
+hasty `git add -A` and asked for them to be gitignored.
+
+- `.gitignore`: added `.opencode/`, `AGENTS.md`, `PLAN.md`, `REVIEW.md`
+  (memory_data/ was already on line 62 from the Week 1 commit)
+- `git rm --cached` on the 41 already-tracked files. Files remain on
+  disk; they're just not in git's index anymore.
+- The v1.1.0 tag's tree still references the removed paths. This is
+  expected: tags are immutable snapshots.
+
+**Lesson learned:** When a project is bootstrapped, the initial
+`git add .` may sweep in files that belong to the development
+environment, not the project. Add `.gitignore` BEFORE the first
+commit, or be ready to do `git rm --cached` cleanup later.
+
+### Commit `3686b28` — Make executed notebooks byte-identical
+
+Running `bash scripts/verify_notebooks.sh` on a fresh checkout would
+change the committed `*_executed.ipynb` files in ways that had
+nothing to do with the actual content. Three non-determinism sources,
+all fixed:
+
+1. **Random cell IDs** (193/193 churn). nbformat's `new_code_cell`
+   assigns random hex IDs by default. Fixed by adding
+   `_assign_stable_ids(nb, prefix)` in `scripts/build_notebooks.py`
+   that gives every cell `f"{prefix}-cell-{i:02d}"`. After a rebuild,
+   subsequent `nbconvert --execute` calls preserve the IDs.
+
+2. **Wall-clock timing** in 3 cells ("Render took 3.2s") and in
+   `format_quantize_report` / `format_render_report` ("Quantized in
+   100ms"). Removed the prints and the timing from the formatted
+   reports. The `elapsed_ms` field is still in the result dict for
+   interactive use.
+
+3. **Jupyter kernel timestamps** in `cell.metadata.execution`
+   (iopub.execute_input, iopub.status.busy, iopub.status.idle,
+   shell.execute_reply). Fixed by adding a post-processing step at
+   the end of `verify_notebooks.sh` that strips these 4 keys after
+   every nbconvert run. Stripped 16/24/20 keys per notebook.
+
+**Test result:** 3 consecutive runs of `bash scripts/verify_notebooks.sh`
+produce byte-identical executed notebooks (sha256 verified end-to-end).
+
+**Test fix:** `test_format_quantize_report_is_markdown_table` was
+asserting "Quantized in 100ms" in the report. Updated to assert
+"Quantized in" NOT in report and "**Quantized**" IS in report, with
+a comment explaining the timing removal.
+
+### Quality Gates After Both Commits
+
+- `ruff check src tests`: clean
+- `ruff format --check src tests`: clean
+- `pytest`: 70/70 pass, coverage 58%
+- `bash scripts/verify_notebooks.sh`: 3/3 execute, 0 errors
+- **sha256 determinism test**: 3 consecutive runs produce identical
+  `*_executed.ipynb` files
+- `git status`: clean (no noise)
+
+### Critical Note About the v1.1.0 Tag
+
+The v1.1.0 tag (`bad254a`, points at `e800c2c`) was created BEFORE
+the two follow-up commits. The tag's tree still contains the
+noise files and the random cell IDs. This is fine for now — tags
+are immutable snapshots of a moment in time. When you push, you
+have two reasonable options:
+
+1. **Push the branch as-is.** Anyone who clones the v1.0.0-release
+   branch gets the latest commit, which has the noise removed and
+   the deterministic notebooks. The tag itself is just a marker.
+
+2. **Re-tag.** If you want v1.1.0 to point at the post-fix commit,
+   move the tag: `git tag -f v1.1.0 <new-commit>` and re-push.
+   This violates "tags are immutable" convention but is sometimes
+   necessary for a v1.x.y that had late-breaking fixes.
+
+For now, option 1 is recommended. The released wheels (when you
+build them) will reflect the branch tip, not the tag.
 
 ## v1.1.0 Release Session Summary (2026-06-16)
 

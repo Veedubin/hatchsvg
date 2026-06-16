@@ -5,6 +5,29 @@
 
 ## In Progress
 
+### Post-release Housekeeping ✅ COMPLETE (2026-06-16)
+
+- [x] **Untracked Boomerang plugin files** — `git rm --cached` on 41 files
+      in `.opencode/`, `AGENTS.md`, and `memory_data/`. Files remain on disk.
+- [x] **Added `.opencode/`, `AGENTS.md`, `PLAN.md`, `REVIEW.md` to .gitignore**
+      (`memory_data/` was already ignored). Now `git add -A` is safe.
+- [x] **Fixed random cell IDs in notebooks** — `_assign_stable_ids(nb, prefix)`
+      helper in `scripts/build_notebooks.py` gives every cell a stable ID like
+      `qs-cell-03`. Eliminates 193/193 churn on every rebuild.
+- [x] **Removed wall-clock timing from notebooks and reports** — the
+      `t0 = time.perf_counter()` / `print(f'Render took ...s')` patterns are
+      gone, and `format_quantize_report` / `format_render_report` no longer
+      show timing in the formatted output.
+- [x] **Strip Jupyter kernel timestamps after `nbconvert --execute`** — new
+      post-processing step in `scripts/verify_notebooks.sh` removes
+      `iopub.execute_input` / `iopub.status.busy` / etc. from
+      `cell.metadata.execution`. Stripped 16/24/20 keys per notebook.
+- [x] **Verified byte-identical on re-execution** — 3 consecutive runs of
+      `bash scripts/verify_notebooks.sh` produce identical sha256 of the
+      executed notebooks.
+- [x] **Updated test** — `test_format_quantize_report_is_markdown_table` no
+      longer asserts on the removed "Quantized in 100ms" string.
+
 ### v1.1.0 Release ✅ COMPLETE (2026-06-16)
 
 - [x] **Decided version: 1.1.0** (additive changes, no bug fixes — SemVer minor)

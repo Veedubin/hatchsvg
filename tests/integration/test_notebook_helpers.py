@@ -179,7 +179,11 @@ def test_format_quantize_report_is_markdown_table():
         ],
     }
     report = nh.format_quantize_report(quant)
-    assert "Quantized in 100ms" in report
+    # Timing is intentionally NOT in the formatted report (would make the
+    # executed notebook non-deterministic). The quant['elapsed_ms'] field
+    # is still available for interactive use; we just don't display it.
+    assert "Quantized in" not in report
+    assert "**Quantized**" in report
     assert "2 colors" in report
     assert "|" in report  # markdown table
     assert "#FF0000" in report

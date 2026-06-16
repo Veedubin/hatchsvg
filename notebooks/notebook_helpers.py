@@ -563,10 +563,14 @@ def render_svg(
     # temp file, then clean it up.
     import tempfile
 
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_in:
-        img.save(tmp_in.name, "PNG")
-        input_path = Path(tmp_in.name)
-    output_path = Path(tempfile.mkstemp(suffix=".svg")[1])
+    # Use a deterministic temp filename so the path logged in notebook
+    # outputs is stable across re-executions. (The path appears in the
+    # "Loading image: ..." line, which is part of the executed notebook
+    # output.) The file is still in a tmp dir and unlinked after use.
+    tmp_dir = Path(tempfile.gettempdir())
+    input_path = tmp_dir / "png2svg_notebook_input.png"
+    output_path = tmp_dir / "png2svg_notebook_output.svg"
+    img.save(input_path, "PNG")
 
     try:
         color_map_used, stats = process_image_to_hatched_svg(
@@ -684,8 +688,15 @@ def display_side_by_side(*images: Image.Image, titles: Optional[List[str]] = Non
 
 
 def format_quantize_report(quant: Dict[str, Any]) -> str:
-    """Pretty-print the quantization result for a notebook cell."""
-    lines = [f"**Quantized in {quant['elapsed_ms']}ms** — {len(quant['palette'])} colors:"]
+    """Pretty-print the quantization result for a notebook cell.
+
+    Note: the wall-clock timing line (``"Quantized in Nms"``) is
+    intentionally omitted from the formatted report because it makes
+    the executed notebook non-deterministic (different ms each run).
+    The timing is still available in ``quant['elapsed_ms']`` for
+    interactive use.
+    """
+    lines = [f"**Quantized** — {len(quant['palette'])} colors:"]
     lines.append("")
     lines.append("| # | Color | Hex | Pixels | % of visible |")
     lines.append("|---|-------|-----|--------|--------------|")
@@ -697,10 +708,17 @@ def format_quantize_report(quant: Dict[str, Any]) -> str:
 
 
 def format_render_report(result: Dict[str, Any]) -> str:
-    """Pretty-print the render result for a notebook cell."""
+    """Pretty-print the render result for a notebook cell.
+
+    Note: the wall-clock timing line (``"Rendered in Nms"``) is
+    intentionally omitted from the formatted report because it makes
+    the executed notebook non-deterministic (different ms each run).
+    The timing is still available in ``result['elapsed_ms']`` for
+    interactive use.
+    """
     stats = result["stats"]
     lines = [
-        f"**Rendered in {result['elapsed_ms']}ms**",
+        "**Rendered**",
         "",
         f"- Layers: {stats.get('layers_generated', '?')}",
         f"- Total segments: {stats.get('total_segments', 0):,}",

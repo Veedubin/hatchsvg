@@ -86,4 +86,48 @@ if [ $ERRORS -gt 0 ]; then
 fi
 
 echo ""
+echo "== Stripping execution timestamps for byte-stable outputs =="
+# Jupyter's kernel manager stamps every executed cell with timestamps in
+# cell.metadata.execution (iopub.execute_input, iopub.status.busy, etc.).
+# These make the executed notebook differ on every re-run, producing
+# meaningless diffs in PRs. We strip them now so the committed executed
+# notebooks are byte-stable on re-execution.
+.venv/bin/python - <<'PY'
+import json
+from pathlib import Path
+
+# Timestamp keys that Jupyter adds per-executed-cell
+TIMESTAMP_KEYS = (
+    "iopub.execute_input",
+    "iopub.status.busy",
+    "iopub.status.idle",
+    "shell.execute_reply",
+)
+
+for nb_path in [
+    "notebooks/quickstart_executed.ipynb",
+    "notebooks/explore_executed.ipynb",
+    "notebooks/craft_executed.ipynb",
+]:
+    p = Path(nb_path)
+    nb = json.loads(p.read_text())
+    stripped = 0
+    for cell in nb.get("cells", []):
+        # Timestamps live in cell.metadata.execution (one entry per cell)
+        meta = cell.get("metadata", {})
+        exec_meta = meta.get("execution", {})
+        for k in TIMESTAMP_KEYS:
+            if k in exec_meta:
+                del exec_meta[k]
+                stripped += 1
+        if not exec_meta:
+            meta.pop("execution", None)
+    # Also strip the notebook-level dates that nbformat adds
+    for k in ("execution_count", "last_executed"):
+        nb.get("metadata", {}).pop(k, None)
+    p.write_text(json.dumps(nb, indent=1) + "\n")
+    print(f"  {nb_path}: stripped {stripped} timestamp keys")
+PY
+
+echo ""
 echo "OK: all 3 notebooks executed without errors"

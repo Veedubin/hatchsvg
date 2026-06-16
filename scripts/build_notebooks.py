@@ -42,6 +42,24 @@ def code(*sources: str) -> Dict[str, Any]:
     raise ValueError("Use multiple `code(...)` calls for multiple cells")
 
 
+def _assign_stable_ids(nb: nbf.NotebookNode, prefix: str) -> None:
+    """Give every cell a deterministic ID based on its position.
+
+    nbformat's ``new_code_cell``/``new_markdown_cell`` assign random hex
+    IDs by default. When notebooks are re-executed via ``nbconvert``,
+    those IDs get re-randomized, which produces a flood of meaningless
+    diffs. This helper assigns ``f"{prefix}-cell-{i:02d}"`` IDs so
+    subsequent re-executions produce byte-identical notebooks (assuming
+    the cell content and output are stable).
+
+    Args:
+        nb: The notebook whose cells should be assigned IDs.
+        prefix: Short notebook identifier (e.g. ``"qs"`` for quickstart).
+    """
+    for i, cell in enumerate(nb.cells):
+        cell.id = f"{prefix}-cell-{i:02d}"
+
+
 # ---------------------------------------------------------------------------
 # Quickstart notebook — 5 cells, copy-paste-done
 # ---------------------------------------------------------------------------
@@ -107,8 +125,6 @@ def build_quickstart() -> nbf.NotebookNode:
             "Use Step 3 first to validate color choices.",
         ),
         code(
-            "import time\n"
-            "t0 = time.perf_counter()\n"
             "result = nh.render_svg(\n"
             "    img,\n"
             "    preset='fast',           # change to 'portrait' for the final version\n"
@@ -117,7 +133,6 @@ def build_quickstart() -> nbf.NotebookNode:
             "    continuous_paths=True,   # chains rows to reduce pen lifts\n"
             "    arc_radius=5.0,          # smooth U-turns; 0 disables\n"
             ")\n"
-            "print(f'Render took {time.perf_counter() - t0:.1f}s')\n"
             "from IPython.display import Markdown, display\n"
             "display(Markdown(nh.format_render_report(result)))",
         ),
@@ -143,6 +158,7 @@ def build_quickstart() -> nbf.NotebookNode:
             "- Or use the CLI directly: `png2svg Bluey.png out.svg --preset portrait`",
         ),
     ]
+    _assign_stable_ids(nb, "qs")
     return nb
 
 
@@ -263,13 +279,10 @@ def build_explore() -> nbf.NotebookNode:
             "3. The background is handled correctly (skipped or not, per your preference)",
         ),
         code(
-            "import time\n"
-            "\n"
             "# Use the matched quant from Stage 2a (palette-aware)\n"
             "quant = nh.quantize_image(img, max_palette=6)\n"
             "matched = nh.match_to_palette(quant, palette)\n"
             "\n"
-            "t0 = time.perf_counter()\n"
             "result = nh.render_svg(\n"
             "    img,\n"
             "    preset='portrait',\n"
@@ -279,7 +292,6 @@ def build_explore() -> nbf.NotebookNode:
             "    continuous_paths=True,\n"
             "    arc_radius=5.0,\n"
             ")\n"
-            "print(f'Render took {time.perf_counter() - t0:.1f}s')\n"
             "display(Markdown(nh.format_render_report(result)))\n"
             "nh.display_svg(result['svg_path'])",
         ),
@@ -323,6 +335,7 @@ def build_explore() -> nbf.NotebookNode:
             "- Comparison with vtracer / vpype / hatched (when to use what)",
         ),
     ]
+    _assign_stable_ids(nb, "exp")
     return nb
 
 
@@ -448,9 +461,6 @@ def build_craft() -> nbf.NotebookNode:
             "not produce a final plot. Re-run with `portrait` for higher quality.",
         ),
         code(
-            "import time\n"
-            "\n"
-            "t0 = time.perf_counter()\n"
             "result = nh.render_svg(\n"
             "    img,\n"
             "    preset='fast',         # use 'portrait' for the final version\n"
@@ -459,7 +469,6 @@ def build_craft() -> nbf.NotebookNode:
             "    continuous_paths=True,\n"
             "    arc_radius=5.0,\n"
             ")\n"
-            "print(f'Render took {time.perf_counter() - t0:.1f}s')\n"
             "from IPython.display import Markdown, display\n"
             "display(Markdown(nh.format_render_report(result)))\n"
             "nh.display_svg(result['svg_path'])",
@@ -505,7 +514,6 @@ def build_craft() -> nbf.NotebookNode:
         ),
         code(
             "from pathlib import Path\n"
-            "import time\n"
             "\n"
             "# Find all PNGs in a directory (e.g. a sticker pack)\n"
             "source_dir = Path('../examples')  # change to your image directory\n"
@@ -519,7 +527,6 @@ def build_craft() -> nbf.NotebookNode:
             "for img_path in image_paths:\n"
             "    print(f'\\n--- {img_path.name} ---')\n"
             "    img = nh.load_image(img_path)\n"
-            "    t0 = time.perf_counter()\n"
             "    result = nh.render_svg(\n"
             "        img,\n"
             "        preset='fast',  # use 'fast' for batch — quality matters less when iterating\n"
@@ -527,15 +534,14 @@ def build_craft() -> nbf.NotebookNode:
             "        max_palette=4,\n"
             "        line_step=8,\n"
             "    )\n"
-            "    elapsed = time.perf_counter() - t0\n"
-            "    \n"
+            "\n"
             "    # Save with matching name\n"
             "    out_path = output_dir / f'{img_path.stem}.svg'\n"
             "    out_path.write_text(result['svg_path'].read_text())\n"
-            "    print(f'  rendered in {elapsed:.1f}s -> {out_path.name} ({out_path.stat().st_size:,} bytes)')\n"
-            "    results.append({'image': img_path.name, 'svg': out_path.name, 'elapsed_s': elapsed})\n"
+            "    print(f'  -> {out_path.name} ({out_path.stat().st_size:,} bytes)')\n"
+            "    results.append({'image': img_path.name, 'svg': out_path.name})\n"
             "\n"
-            "print(f'\\nBatch complete: {len(results)} images, total {sum(r[\"elapsed_s\"] for r in results):.1f}s')",
+            "print(f'\\nBatch complete: {len(results)} images')",
         ),
         md(
             "## 6. Parameter deep-dive",
@@ -641,6 +647,7 @@ def build_craft() -> nbf.NotebookNode:
             "- File an issue: https://github.com/png2svg/png2svg/issues",
         ),
     ]
+    _assign_stable_ids(nb, "craft")
     return nb
 
 

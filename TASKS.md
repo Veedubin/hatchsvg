@@ -5,6 +5,25 @@
 
 ## In Progress
 
+### Code Review & Bug Fix ✅ COMPLETE (2026-06-16)
+
+- [x] **Multi-agent code review** — 3 specialists in parallel:
+      boomerang-linter (50 → 0 lint errors), boomerang-coder (1 dead
+      function found), boomerang-architect (refactor opportunities).
+- [x] **Dead code removed** — `core.py:1405-1458` duplicate `main()`
+      was never called. Removed 54 lines + the unused `import argparse`.
+- [x] **Lint clean** — per-file ignores added for `notebooks/*.ipynb`,
+      `notebooks/*_executed.ipynb`, and `scripts/png2svg_legacy.py`.
+- [x] **Refactor** — extracted Python from `verify_notebooks.sh`
+      heredocs to `scripts/verify_notebooks_helpers.py` (a proper module).
+- [x] **Bug fix caught by new test** — `save_session` was failing
+      with `TypeError: uint32 not JSON serializable`. Fixed by
+      coercing RGB values to plain `int` before serialization.
+- [x] **18 new tests** — 3 CLI tests (session roundtrip, missing
+      file, --stats) + 15 unit tests for the extracted helpers module.
+- [x] **Quality gates**: ruff clean, format clean, 88/88 tests pass,
+      coverage 60% (was 58%).
+
 ### Post-release Housekeeping ✅ COMPLETE (2026-06-16)
 
 - [x] **Untracked Boomerang plugin files** — `git rm --cached` on 41 files

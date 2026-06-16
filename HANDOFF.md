@@ -1,7 +1,103 @@
-# png2svg Handoff — 2026-06-16 (Post-release housekeeping)
+# png2svg Handoff — 2026-06-16 (Code review + bug fix)
 
 > **Session log**: This file accumulates across sessions. Newest content is
-> at the top. Earlier v1.1.0 release session is preserved below.
+> at the top. Earlier sessions are preserved below.
+
+## Code Review Session (2026-06-16)
+
+Multi-agent parallel code review. Three specialist agents dispatched
+in parallel: `boomerang-linter` (lint/type), `boomerang-coder`
+(dead code/deps), and `boomerang-architect` (refactor). Findings
+were aggregated and applied in two commits.
+
+### What Shipped (2 commits)
+
+| Commit | Description |
+|--------|-------------|
+| `aba677f` | `chore: code review fixes (lint, dead code, refactor)` |
+| `fa1a1a0` | `test: add CLI session roundtrip and verify_helpers unit tests; fix JSON bug` |
+
+### Commit `aba677f` — Code Review Fixes
+
+1. **Dead code removed**: `src/png2svg/core.py` had a duplicate
+   `main()` function (54 lines) that was never called. The real entry
+   point is `png2svg.cli:main` per `pyproject.toml`. Also removed
+   the now-unused `import argparse` at module top.
+
+2. **Lint clean**: 50 ruff errors → 0 via per-file ignores:
+   - `notebooks/*.ipynb` — ignore I001/E402/F811 (Jupyter cell
+     architecture violates these by design)
+   - `notebooks/*_executed.ipynb` — ignore ALL (generated output)
+   - `scripts/png2svg_legacy.py` — added I001 to existing ignore
+
+3. **Format clean**: Added explicit `ruff format` steps in
+   `verify_notebooks.sh` for both source and executed notebooks to
+   prevent future drift.
+
+4. **Refactor**: Extracted Python from inline heredocs in
+   `verify_notebooks.sh` to a new module
+   `scripts/verify_notebooks_helpers.py`. The heredocs were 30+
+   lines of Python inside bash; extracting them makes the logic
+   readable, testable, and re-usable.
+
+5. **Notebook cleanup**: Removed unused `from dataclasses import asdict`
+   imports (F401) and the `f-string` without placeholders (F541)
+   that ruff flagged.
+
+6. **conftest.py**: Added `SCRIPTS_DIR` to `sys.path` so tests can
+   import `scripts/verify_notebooks_helpers.py` as a module.
+
+### Commit `fa1a1a0` — Tests + Bug Fix
+
+The new `test_cli_save_session_roundtrip` test **caught a real bug
+on the first run**: `save_session()` failed with
+`TypeError: Object of type uint32 is not JSON serializable`. The
+color_map values contained numpy `uint32` scalars (from the
+quantization path), and `json.dump` couldn't serialize them.
+
+**Fix**: in `src/png2svg/core.py::save_session`, convert each RGB
+value to a plain Python `int` via `int(c) for c in ...` before
+serializing. The data is conceptually 8-bit RGB, so this is a safe
+coercion. Comment added explaining the constraint.
+
+**New tests**:
+- `test_cli_save_session_roundtrip` — exercises `--save-session` and
+  `--use-session` end-to-end
+- `test_cli_missing_input_file` — exercises the FileNotFoundError
+  path in cli.py
+- `test_cli_stats_flag_runs` — exercises the `--stats` flag
+- `test_verify_notebook_helpers.py` (15 tests) — unit tests for the
+  extracted verify_helpers module: check_for_errors,
+  strip_execution_timestamps, CLI subprocess, byte-stability
+
+### Quality Gates After This Session
+
+- `ruff check` (full project): **clean**
+- `ruff format --check` (full project): **clean**
+- `pytest`: **88/88 pass** (was 70; +18 new), coverage **60%** (was 58%)
+- `bash scripts/verify_notebooks.sh`: 3/3 execute, byte-identical
+- `git status`: clean
+
+### Findings Deferred (With Reason)
+
+These were identified but not fixed because they're not worth the
+risk in this session:
+
+1. **Splitting `core.py` into 6 modules** (color.py, path.py,
+   svg.py, session.py, stats.py, params.py) — would require
+   rewriting tests, currently workable structure. Defer to v1.2.0.
+2. **Replacing the byte-for-byte golden file test with semantic XML
+   comparison** — would change the test contract, defer until the
+   next refactor that touches SVG output.
+3. **Adding `from __future__ import annotations` to all files** —
+   Python 3.11+ supports PEP 604 natively; the import is redundant
+   cargo cult. Skipped.
+4. **Moving `scipy` from `plot` extra to core dependencies** —
+   semantic change to `pyproject.toml`, not a code fix. Defer.
+5. **Notebook helpers public API bloat** (`display_side_by_side`,
+   `image_to_png_bytes`, `image_to_data_url`, `numpy_to_pil` are
+   never used) — they're part of the public API for users to call
+   from their own notebooks. KEEP for now, evaluate after v1.2.0.
 
 ## Post-release Housekeeping Session (2026-06-16)
 

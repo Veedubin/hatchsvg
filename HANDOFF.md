@@ -12,13 +12,14 @@ ways to use this file" — notebooks are the right tool for that.
 
 ### What Shipped
 
-**3 conventional commits:**
+**1 new commit (Notebook Suite):**
 
 ```
-<to be filled in on commit>
+010e14d feat(notebooks): ship 3-notebook tutorial suite
 ```
 
-(Previous commits: `77ea467` GUI design doc, `64c8ae6` HANDOFF update, `386be6d` Week 2 polish.)
+(Previous commits: `77ea467` GUI design doc, `64c8ae6` HANDOFF update,
+`386be6d` Week 2 polish.)
 
 ### New Files
 

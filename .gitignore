@@ -61,6 +61,16 @@ venv.bak/
 !color_palettes/
 memory_data/
 
+# Boomerang plugin / session artifacts — these are tooling for the
+# development environment that lives alongside this repo, NOT part
+# of the png2svg project itself. They should never be committed to
+# this repo. (If you want to track plugin behavior, use a separate
+# repo for the plugin.)
+.opencode/
+AGENTS.md
+PLAN.md
+REVIEW.md
+
 # Notebook runtime outputs (created when users run the notebooks)
 # Keep the *_executed.ipynb files (committed for reviewers) but
 # exclude user-generated outputs that appear in the working tree

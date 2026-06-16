@@ -5,6 +5,29 @@
 
 ## In Progress
 
+### Notebook Suite ✅ COMPLETE (2026-06-15)
+
+All three tutorial notebooks shipped in `notebooks/`, end-to-end tested:
+
+- [x] **`notebooks/quickstart.ipynb`** — 5 cells, copy-paste-done path, ~5 min
+- [x] **`notebooks/explore.ipynb`** — 6 cells, 4-stage walkthrough with
+      2a/2b/2c branches for color matching
+- [x] **`notebooks/craft.ipynb`** — 5 cells, advanced: custom palettes,
+      per-color remap, sessions, batch processing, parameter deep-dive,
+      comparison with adjacent tools (vtracer/vpype/hatched/plottter)
+- [x] **`notebooks/notebook_helpers.py`** — shared module wrapping
+      `png2svg.core` (no magic, every function is a one-liner)
+- [x] **`notebooks/README.md`** — entry point with "start here" guidance
+- [x] **`scripts/build_notebooks.py`** — programmatic notebook builder
+      (notebooks are reviewable as Python in PRs)
+- [x] **`scripts/verify_notebooks.sh`** — CI script that executes all 3
+      notebooks end-to-end and checks for errors
+- [x] **10 smoke tests** in `tests/integration/test_notebook_helpers.py`
+- [x] **`[notebook]` extra** in `pyproject.toml` (jupyter, matplotlib,
+      ipykernel, nbformat)
+- [x] **70 total tests** (was 60); coverage 58% (was 55%)
+- [x] **All 3 notebooks execute cleanly** via `bash scripts/verify_notebooks.sh`
+
 ### Week 2 Polish ✅ COMPLETE (2026-06-15)
 
 All Week 2 deliverables shipped on branch `v1.0.0-release` (continuing the same
@@ -58,26 +81,30 @@ All Week 1 deliverables shipped on branch `v1.0.0-release`:
 
 ## Next Up (Week 3)
 
-### Module Split (refactor of `core.py`)
+### Module Split (refactor of `core.py`) — DEFERRED
 
-The 700-line `core.py` is functional but monolithic. Week 3 splits it into:
+The 700-line `core.py` is functional but monolithic. Refactor deferred
+to allow user-facing notebook work to ship first. Tests are in place
+to verify the refactor is non-breaking when we get to it.
 
-- `src/png2svg/color.py` — palette loading, color matching, naming
-- `src/png2svg/path.py` — hatch path generation, components, arcs
-- `src/png2svg/svg.py` — SVG group rendering, XML emission
-- `src/png2svg/session.py` — save/load
-- `src/png2svg/stats.py` — compute_layer_stats, display
-- `src/png2svg/params.py` — RenderParams, LayerResult, StrokeStyle
-- `src/png2svg/core.py` — orchestration / `process_image_to_hatched_svg`
+### GUI (HTML/JS + FastAPI) — DEFERRED, design doc shipped
 
-Tests are now in place to verify the refactor is non-breaking.
+A complete design was written in `GUI_ARCHITECTURE.md`. Decision was
+made to ship the notebook suite first; the GUI design is preserved
+as a reference. Revisit if there's user demand for a non-Python tool.
 
-### README Polish (Week 2 leftover)
+### Long-Term Feature Backlog (from REVIEW.md)
 
-- [ ] Add a hero GIF showing input → output (requires a screen recorder or
-      external tool)
-- [ ] Add 3-5 real photo examples (vs the procedural scene)
-- [ ] Add a "When NOT to use png2svg" section
+- [ ] Lab / CIEDE2000 color matching (vs current HSV Euclidean)
+- [ ] Alternative fill modes: stippling, cross-hatch, contour-parallel, halftone
+- [ ] Per-color hatch tuning (`--light-hatch 6 --dark-hatch 2`)
+- [ ] `lxml`/`ElementTree` for safe SVG emission
+- [ ] Plugin entry-points for community hatch styles
+- [ ] Docker image
+- [ ] Inkscape plugin
+- [ ] PyPI publish (`python -m build` + `twine upload`)
+- [ ] Generate hero GIF for README (requires screen recorder)
+- [ ] Update placeholder author/repo URLs when user provides real values
 
 ## Backlog
 
@@ -117,26 +144,29 @@ Tests are now in place to verify the refactor is non-breaking.
 - [x] Add processing statistics with `--stats` flag
 - [x] Quality gates for all changes (ruff, mypy-free, pytest)
 
-## Quality Status (as of 2026-06-15, end of Week 2)
+## Quality Status (as of 2026-06-15, end of notebook suite)
 
 | Gate | Status |
 |------|--------|
 | `pip install -e .` succeeds | ✅ |
 | `pip install -e ".[plot]"` succeeds | ✅ |
 | `pip install -e ".[dev]"` succeeds | ✅ |
+| `pip install -e ".[notebook]"` succeeds | ✅ |
 | `png2svg --version` prints `png2svg 1.0.0` | ✅ |
 | `python -m png2svg --version` works | ✅ |
-| `pytest tests/` passes all 60 tests (was 27 in Week 1) | ✅ |
-| `ruff check src tests` clean | ✅ |
+| `pytest tests/` passes all 70 tests (was 27 in Week 1) | ✅ |
+| `ruff check src tests scripts` clean | ✅ |
 | `ruff format` clean | ✅ |
-| `.github/workflows/ci.yml` valid YAML | ✅ (6 matrix jobs) |
+| `bash scripts/verify_notebooks.sh` — all 3 notebooks execute | ✅ |
+| `.github/workflows/ci.yml` valid YAML | ✅ |
 | Git history clean (conventional commits) | ✅ |
-| Coverage | 55% (up from 49% in Week 1) |
+| Coverage | 58% (up from 49% in Week 1) |
 | `png2svg.presets` coverage | 100% |
+| `notebook_helpers.py` coverage | ~60% |
 | Multi-format input (JPG/WebP/BMP/GIF/TIFF) | ✅ tested |
 | Named presets (6) | ✅ tested |
-| `--version` flag | ✅ |
-| `python -m png2svg` | ✅ |
+| Tutorial notebooks (3) | ✅ tested |
+| Notebook helpers | ✅ tested |
 
 ## Resume Instructions
 

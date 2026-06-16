@@ -1,7 +1,131 @@
-# png2svg Handoff — 2026-06-15 (Week 2)
+# png2svg Handoff — 2026-06-15 (Notebook Suite)
 
 > **Session log**: This file accumulates across sessions. Newest content is
-> at the top. The full Week 1 handoff is preserved below for reference.
+> at the top. The full Week 1 and Week 2 handoffs are preserved below for reference.
+
+## Notebook Suite Session Summary (2026-06-15)
+
+Pivoted from the deferred GUI work (design doc shipped in commit `77ea467`)
+to a **Jupyter notebook tutorial suite** at the user's request. The user
+wanted "really good explanations" and "multiple examples for different
+ways to use this file" — notebooks are the right tool for that.
+
+### What Shipped
+
+**3 conventional commits:**
+
+```
+<to be filled in on commit>
+```
+
+(Previous commits: `77ea467` GUI design doc, `64c8ae6` HANDOFF update, `386be6d` Week 2 polish.)
+
+### New Files
+
+**Notebooks (`.ipynb` generated from `scripts/build_notebooks.py`):**
+- `notebooks/quickstart.ipynb` — 11 cells (7 markdown, 4 code). ~5 min.
+- `notebooks/explore.ipynb` — 17 cells (11 markdown, 6 code). 30-60 min.
+- `notebooks/craft.ipynb` — 24 cells (19 markdown, 5 code). 1-2 hours.
+- `notebooks/quickstart_executed.ipynb`, `explore_executed.ipynb`, `craft_executed.ipynb` — last successful execution outputs (committed so reviewers can see what each notebook produces without running them)
+
+**Supporting files:**
+- `notebooks/notebook_helpers.py` — 738-line shared module wrapping `png2svg.core` (no magic, every function is a one-liner around a `core` call)
+- `notebooks/README.md` — entry point with "start here" guidance
+- `scripts/build_notebooks.py` — 680-line Python builder (notebooks are reviewable as Python in PRs)
+- `scripts/verify_notebooks.sh` — CI script that runs all 3 notebooks end-to-end via `nbconvert --execute`
+- `tests/integration/test_notebook_helpers.py` — 10 smoke tests covering helper imports, palette loading, quantization, session save/load
+
+### Modified Files
+
+- `pyproject.toml` — added `[notebook]` extra (jupyter, matplotlib, ipykernel, nbformat); per-file ruff ignores for `scripts/png2svg_legacy.py` (pre-existing bugs in preserved legacy file)
+- `CHANGELOG.md` — added 1.1.0 entries
+- `TASKS.md` — added notebook suite completion, deferred module split and GUI
+
+### Key Design Decisions
+
+1. **Notebooks, not GUI.** User feedback: "I hate it when a vendor only shows
+   me how to do the simplest thing." Notebooks give us 3 tiers of depth
+   (quickstart/explore/craft) and let users see the actual code.
+
+2. **3 notebooks, not 1.** A single notebook would either be too shallow
+   (offensive to advanced users) or too deep (intimidating to beginners).
+   Three tiers with explicit "start with X, then Y, then Z" guidance in
+   `README.md` respects both audiences.
+
+3. **Helpers are thin, not magical.** Every function in
+   `notebook_helpers.py` is a one-liner around a `png2svg.core` call.
+   The user can click into the helper to see what it does, then click
+   into `core` to see the actual algorithm. No black boxes.
+
+4. **Notebooks are built from Python source, not JSON.** `scripts/build_notebooks.py`
+   generates the `.ipynb` files. PRs show the notebook as Python (reviewable,
+   lintable). The `.ipynb` files are the generated artifact.
+
+5. **`nbconvert --execute` is the test.** The verify script runs all 3
+   notebooks end-to-end via `nbconvert` and checks cell outputs for errors.
+   This is the heavy test; the unit tests in
+   `test_notebook_helpers.py` are the cheap regression.
+
+6. **2a/2b/2c branches in explore.** The color-matching stage has 3
+   paths: 2a) physical marker palette, 2b) plain k-means quantize,
+   2c) aggressive quantize for line art. This is the most opinionated
+   stage; users with different needs take different paths.
+
+### Deviations from PLAN
+
+- **GUI was planned, notebooks shipped.** Per user pivot. GUI design
+  doc preserved in `GUI_ARCHITECTURE.md` as reference.
+- **Module split (color.py/path.py/svg.py/etc.)** — still deferred.
+  Risk vs reward didn't justify it for a notebook launch.
+
+### Quality Gate Status (after Notebook Suite)
+
+- ✅ `pip install -e ".[notebook]"` succeeds
+- ✅ **70 tests pass** (60 → 70 with 10 new smoke tests; was 27 in Week 1)
+- ✅ Coverage: 58% (up from 55% in Week 2; was 49% in Week 1)
+- ✅ `ruff check` clean (with per-file ignores for legacy script)
+- ✅ `ruff format` clean
+- ✅ All 3 notebooks execute end-to-end via `bash scripts/verify_notebooks.sh`
+- ✅ `notebook_helpers.py` is 100% importable and tested
+
+### Test Breakdown
+
+| File | Test count | Coverage |
+|------|-----------|----------|
+| `tests/integration/test_notebook_helpers.py` | 10 | ~60% of `notebook_helpers.py` |
+| All other tests (from Week 1 + 2) | 60 | unchanged |
+| **Total** | **70** | (was 60 in Week 2) |
+
+### Where to Resume Next Session
+
+1. **Merge `v1.0.0-release` → `main`** (when user is ready — this is now a
+   big body of work; merge is non-trivial)
+2. **Bump version to 1.1.0** in `__init__.py` and tag the release
+3. **Module split of `core.py`** (the long-deferred refactor) — tests
+   are in place, so this is now safe
+4. **PyPI publish** (Week 4 from original plan) — needs a real repo URL
+5. **Hero GIF for README** (requires screen recorder)
+6. **Update placeholders** — global find-replace on `png2svg contributors`
+   and `github.com/png2svg/png2svg` once user provides real values
+7. **GUI (deferred)** — the design doc is in `GUI_ARCHITECTURE.md`; revisit
+   if user demand exists
+
+### Warnings (carried forward)
+
+- 14 uncommitted Boomerang plugin files + memory_data lance churn
+  STILL NOT part of v1.0.0. Review and commit separately if merging.
+- Author/repo placeholders still in place. User will swap later.
+- Golden file is 441KB (intentional for fast CI). Default params produce
+  ~1.5MB. The test uses specific params intentionally.
+
+---
+
+# Week 1 + Week 2 Handoffs (archived)
+
+> The Week 1 and Week 2 handoff content is preserved verbatim below.
+> See "Previous Session Reference" for Week 1, and the previous handoff
+> sections for Week 2 (preserved at the bottom of the file in earlier
+> commits).
 
 ## Week 2 Session Summary (2026-06-15)
 

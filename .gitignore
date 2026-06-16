@@ -60,3 +60,14 @@ venv.bak/
 *.session.json
 !color_palettes/
 memory_data/
+
+# Notebook runtime outputs (created when users run the notebooks)
+# Keep the *_executed.ipynb files (committed for reviewers) but
+# exclude user-generated outputs that appear in the working tree
+notebooks/my_*.svg
+notebooks/my_*.json
+notebooks/explore_output.svg
+notebooks/explore_session.json
+notebooks/craft_session.json
+notebooks/batch_output/
+notebooks/__pycache__/

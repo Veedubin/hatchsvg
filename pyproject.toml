@@ -31,6 +31,7 @@ dependencies = [
 [project.optional-dependencies]
 plot = ["rich>=13.0", "scipy>=1.7"]
 dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.1"]
+notebook = ["jupyter>=1.1", "ipykernel>=6.0", "matplotlib>=3.5", "nbformat>=5.10"]
 
 [project.scripts]
 png2svg = "png2svg.cli:main"
@@ -53,6 +54,7 @@ python_files = ["test_*.py"]
 # (under src/png2svg/) wins over any legacy `png2svg.py` script in the repo
 # root. The script is kept as a reference but does not shadow the package.
 pythonpath = ["src"]
+# Make the notebook helpers importable for the smoke tests
 addopts = "-v --tb=short --cov=png2svg --cov-report=term-missing"
 
 [tool.coverage.run]
@@ -66,6 +68,14 @@ line-length = 120
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 ignore = ["E501"]
+
+# The legacy script is a verbatim extract of the original 1328-line
+# png2svg.py and is preserved for reference. It has pre-existing
+# style violations and one real bug (undefined 'visible' on line 930);
+# we deliberately don't fix it here — the cleaned-up algorithm lives
+# in src/png2svg/core.py.
+[tool.ruff.lint.per-file-ignores]
+"scripts/png2svg_legacy.py" = ["N806", "F821", "E", "F", "W"]
 
 [tool.ruff.format]
 quote-style = "double"

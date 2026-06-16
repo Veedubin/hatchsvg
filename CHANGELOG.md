@@ -8,17 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.0] - Unreleased
 
 ### Added
-- **Named presets** — `--preset portrait|logo|line-art|photo|sketch|fast` for common use cases; explicit flags override preset values
-- **Multi-format input** — CLI now accepts `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.gif`, `.tiff`, `.tif` (Pillow handles the decoding; CLI validates the extension up front with a friendly error)
-- **New module `png2svg.presets`** — `PRESETS` dict, `list_presets()`, `get_preset(name)`, `apply_preset(base, name)`; ships with 6 hand-tuned presets
+- **Three tutorial notebooks** in `notebooks/`:
+  - `quickstart.ipynb` — 5 cells, ~5 minutes, copy-paste-done path
+  - `explore.ipynb` — 6 cells, 4-stage walkthrough with explanations and 2a/2b/2c branches for color matching
+  - `craft.ipynb` — 5 cells, advanced usage: custom palettes, per-color remap, session save/load, batch processing, parameter deep-dive, comparison with adjacent tools
+- **Shared `notebooks/notebook_helpers.py`** — thin wrappers around `png2svg.core` (load_image, quantize_image, match_to_palette, render_svg, snapshot_session, etc.). No magic — every function is a one-liner around a `core` call.
+- **`notebooks/README.md`** — entry point that says "start with quickstart, then explore, then craft"
+- **`scripts/build_notebooks.py`** — programmatic notebook builder (notebooks are reviewable as Python in PRs, not as JSON)
+- **`scripts/verify_notebooks.sh`** — CI script that runs all 3 notebooks end-to-end via `nbconvert --execute` and checks for errors
+- **10 smoke tests** in `tests/integration/test_notebook_helpers.py` covering helper imports, palette loading, quantization, session save/load
+- **`[notebook]` extra** in `pyproject.toml`: `jupyter`, `ipykernel`, `matplotlib`, `nbformat`
+- **Per-file ruff ignores** for `scripts/png2svg_legacy.py` (pre-existing bugs in the preserved legacy file)
+- **Named presets** — `--preset portrait|logo|line-art|photo|sketch|fast` for common use cases; explicit CLI flags override preset values
+- **Multi-format input** — CLI now accepts `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.gif`, `.tiff`, `.tif` (Pillow decodes; CLI validates extension with a friendly error)
+- **New module `png2svg.presets`** — typed `PRESETS` dict with 6 hand-tuned presets, `list_presets()`, `get_preset()`, `apply_preset()`; ships with 6 hand-tuned presets
 - **`get_run_configuration(args, preset_name=...)`** — preset-aware variant of the CLI config loader; explicit CLI flags still win over preset defaults
-- **21 new unit tests** in `test_presets.py` (13 tests) and `test_preset_config.py` (8 tests); all preset fields validated against `RenderParams` dataclass
+- **21 new tests** in `test_presets.py` (13 tests) and `test_preset_config.py` (8 tests); all preset fields validated against `RenderParams` dataclass
 - **8 new CLI integration tests** in `tests/integration/test_cli.py` — full subprocess coverage of `--version`, `--help`, presets, multi-format input, error handling
 - **`examples/` directory** with `scene.png` (procedural 200×200 input) and 4 output SVGs demonstrating each preset (fast/portrait/logo/sketch)
 
 ### Changed
-- **README rewrite** — new quickstart, comparison table vs similar tools (potrace, vtracer, Inkscape), full CLI flag table, Cookbook section with 5+ recipes, expanded project structure
-- **Test count** — 27 → 60 tests; coverage 49% → 55%; `presets.py` 100% covered
+- **README rewrite** — new quickstart, comparison table vs potrace/vtracer/Inkscape, full CLI flag table, 5+ Cookbook recipes, expanded project structure
+- **Test count** — 27 → 70 tests; coverage 49% → 58%; `presets.py` 100% covered, `notebook_helpers.py` ~60% covered
 
 ## [1.0.0] - 2026-06-15
 

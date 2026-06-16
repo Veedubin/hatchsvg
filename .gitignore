@@ -36,6 +36,9 @@ htmlcov/
 coverage.xml
 *.cover
 
+# uv lockfile (dev environment)
+uv.lock
+
 # ruff / mypy
 .ruff_cache/
 .mypy_cache/
@@ -70,6 +73,17 @@ memory_data/
 AGENTS.md
 PLAN.md
 REVIEW.md
+
+# AI assistant session documents — internal development notes that
+# were committed in error before .gitignore patterns were added.
+# The package, tests, and user-facing docs (README, CHANGELOG, LICENSE)
+# are the only public artifacts that should ever ship on GitHub.
+CONTEXT_png2svg.md
+GUI_ARCHITECTURE.md
+HANDOFF.md
+ROADMAP.md
+SETUP.md
+TASKS.md
 
 # Notebook runtime outputs (created when users run the notebooks)
 # Keep the *_executed.ipynb files (committed for reviewers) but

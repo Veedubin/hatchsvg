@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+import png2svg
+
 # Project root (parent of tests/)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 VENV_PNG2SVG = PROJECT_ROOT / ".venv" / "bin" / "png2svg"
@@ -42,7 +44,7 @@ def test_cli_version():
         check=False,
     )
     assert result.returncode == 0
-    assert "png2svg 1.0.0" in result.stdout
+    assert f"png2svg {png2svg.__version__}" in result.stdout
 
 
 def test_cli_help_lists_presets():

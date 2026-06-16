@@ -15,14 +15,16 @@ the moment a remote is added.
 | Commit | Description |
 |--------|-------------|
 | `e800c2c` | `chore(release): bump version to 1.1.0` |
+| `a5ae576` | `docs: record v1.1.0 release in HANDOFF.md and TASKS.md` |
 
 - Bumped `__version__` to 1.1.0
 - Finalized `[1.1.0] - 2026-06-16` entry in CHANGELOG.md
 - Fixed `test_cli_version` to import `png2svg.__version__` instead of
   hardcoding `1.0.0` (test was breaking on the very first commit, but
   never noticed because previous session didn't run the full suite)
-- Tagged `v1.1.0` (annotated) at `e800c2c` and `v1.0.0` (annotated)
-  retroactively at `6e7f3f7` — both have release-note messages
+- Tagged `v1.1.0` (annotated, SHA `bad254a`) at `e800c2c` and
+  `v1.0.0` (annotated, SHA `2702afc`) retroactively at `6e7f3f7` —
+  both have release-note messages
 
 ### Why 1.1.0, Not 1.0.1
 

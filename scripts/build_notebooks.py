@@ -314,7 +314,6 @@ def build_explore() -> nbf.NotebookNode:
             "print(f'SVG: {svg_out.absolute()} ({svg_out.stat().st_size:,} bytes)')\n"
             "\n"
             "# Save the session (params + palette + color map) for reproducibility\n"
-            "from dataclasses import asdict\n"
             "from png2svg.core import RenderParams\n"
             "session = nh.snapshot_session(\n"
             "    params=RenderParams(**result['params']),\n"
@@ -480,7 +479,6 @@ def build_craft() -> nbf.NotebookNode:
             "want to iterate without losing the working version.",
         ),
         code(
-            "from dataclasses import asdict\n"
             "from pathlib import Path\n"
             "from png2svg.core import RenderParams\n"
             "import notebook_helpers as nh\n"
@@ -500,7 +498,7 @@ def build_craft() -> nbf.NotebookNode:
             "\n"
             "# Reload it later\n"
             "reloaded = nh.load_session_file(session_path)\n"
-            "print(f'\\nReloaded session:')\n"
+            "print('\\nReloaded session:')\n"
             "print(f'  image: {reloaded[\"image\"]}')\n"
             'print(f\'  params: max_palette={reloaded["params"]["max_palette"]}, line_step={reloaded["params"]["line_step"]}\')\n'
             'print(f\'  palette: {reloaded["palette"]["brand"]} ({len(reloaded["palette"]["colors"])} colors)\')\n'

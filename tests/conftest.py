@@ -1,11 +1,20 @@
 """Shared pytest fixtures for png2svg tests."""
 
+import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 PALETTES_DIR = Path(__file__).parent.parent / "color_palettes"
+SCRIPTS_DIR = Path(__file__).parent.parent / "scripts"
+
+# Make the scripts/ directory importable so tests can do
+# ``from scripts.verify_notebooks_helpers import ...``. The verify
+# script's helper is structured as a module (not just a script) so
+# it can be unit tested.
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
 
 
 @pytest.fixture

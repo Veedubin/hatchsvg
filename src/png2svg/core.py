@@ -13,7 +13,6 @@ Features
 - "Session" JSON save/load.
 """
 
-import argparse
 import colorsys
 import json
 from dataclasses import asdict, dataclass, field
@@ -479,11 +478,16 @@ def save_session(
         if pal_hex is None:
             continue
         key = pal_hex.lstrip("#").upper()
+        # RGB tuples may contain numpy scalars (e.g. np.uint32 from the
+        # quantization path). json.dump can't serialize those — convert
+        # each value to a plain Python int.
+        marker_rgb = [int(c) for c in (entry.get("marker_rgb") or [])]
+        palette_rgb = [int(c) for c in (entry.get("palette_rgb") or [])]
         color_map_out[key] = {
             "marker_name": entry.get("marker_name"),
             "marker_hex": entry.get("marker_hex"),
-            "marker_rgb": list(entry.get("marker_rgb") or []),
-            "palette_rgb": list(entry.get("palette_rgb") or []),
+            "marker_rgb": marker_rgb,
+            "palette_rgb": palette_rgb,
             "hatch_step": entry.get("hatch_step"),
             "is_white_medium": bool(entry.get("is_white_medium", False)),
         }
@@ -1400,59 +1404,3 @@ def _display_stats_table_simple(stats: Dict[str, Any]) -> None:
                 f"{ls.get('component_count', 0):>12,} {ls.get('reduction_pct', 0):>9.1f}%"
             )
         print("-" * 70)
-
-
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("input")
-    p.add_argument("output_svg")
-    p.add_argument("--max-palette", type=int, default=12)
-    p.add_argument("--line-step", type=int, default=4)
-    p.add_argument("--alpha-threshold", type=int, default=10)
-    p.add_argument("--min-pixels", type=int, default=200)
-    p.add_argument("--stroke-width", type=float, default=None)
-    p.add_argument("--outline-width", type=float, default=None)
-    p.add_argument("--no-skip-background", action="store_true")
-    p.add_argument("--white-medium", action="store_true")
-    p.add_argument("--paper-white-soft", type=int, default=20)
-    p.add_argument("--scale", type=float, default=1.0)
-    p.add_argument("--separate-outline", action="store_true")
-    p.add_argument("--palette-file", help="Path to marker palette JSON")
-    p.add_argument("--naming-mode", choices=["inkscape", "flat"], default="inkscape")
-    p.add_argument(
-        "--continuous-paths",
-        action="store_true",
-        help="Generate continuous serpentine paths to reduce pen plotter vibration",
-    )
-    p.add_argument(
-        "--arc-radius", type=float, default=0.0, help="Add arc smoothing at row-end 180° reversals (0 = disabled)"
-    )
-    p.add_argument("--save-session", action="store_true")
-    p.add_argument("--use-session", help="Load previous session JSON")
-    p.add_argument("--progress", action="store_true", help="Show progress bars (requires rich)")
-    p.add_argument("--stats", action="store_true", help="Show processing statistics")
-
-    a = p.parse_args()
-
-    # Check for Rich if --progress is requested
-    if a.progress and not HAS_RICH:
-        print("Warning: --progress requires 'rich' package. Install with: pip install rich")
-
-    input_path = Path(a.input)
-    output_path = Path(a.output_svg)
-
-    # Load configuration
-    params, marker_palette, color_map, palette_file = get_run_configuration(a)
-
-    # Run Process
-    color_map_used, processing_stats = process_image_to_hatched_svg(
-        input_path, output_path, params, marker_palette, color_map, show_progress=a.progress, show_stats=a.stats
-    )
-
-    # Display stats if requested
-    if a.stats:
-        _display_stats_table(processing_stats)
-
-    if a.save_session:
-        session_out_path = output_path.with_suffix(output_path.suffix + ".session.json")
-        save_session(session_out_path, input_path, palette_file, params, color_map_used)

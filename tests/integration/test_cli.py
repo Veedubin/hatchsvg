@@ -255,3 +255,133 @@ def test_cli_stats_flag_runs(small_test_png, tmp_path):
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert out_svg.exists()
+
+
+def test_cli_help_shows_examples():
+    """`png2svg --help` shows the Examples: section."""
+    result = subprocess.run(
+        [str(VENV_PNG2SVG), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "Examples:" in result.stdout
+
+
+def test_cli_preview_flag_parsed(small_test_png, tmp_path):
+    """`png2svg --preview` parses and exits 0 (browser open is best-effort)."""
+    out_svg = tmp_path / "out.svg"
+    result = subprocess.run(
+        [
+            str(VENV_PNG2SVG),
+            str(small_test_png),
+            str(out_svg),
+            "--preset",
+            "fast",
+            "--preview",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    # --preview may warn about browser but should not fail
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert out_svg.exists()
+
+
+def test_cli_split_layers_creates_one_file_per_layer(small_test_png, tmp_path):
+    """`png2svg --split-layers` creates N+1 files (main + N layer files)."""
+    out_svg = tmp_path / "out.svg"
+    result = subprocess.run(
+        [
+            str(VENV_PNG2SVG),
+            str(small_test_png),
+            str(out_svg),
+            "--preset",
+            "fast",
+            "--split-layers",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert out_svg.exists()
+
+    # Find split-layer files matching the pattern <stem>_<NN>_<name>.svg
+    layer_files = sorted(tmp_path.glob("out_??_*.svg"))
+    assert len(layer_files) >= 1, f"Expected at least 1 split-layer file, found {len(layer_files)}"
+    # Verify naming pattern: out_00_<name>.svg, out_01_<name>.svg, etc.
+    for f in layer_files:
+        assert f.stem.startswith("out_"), f"Unexpected split-layer filename: {f.name}"
+        parts = f.stem.split("_")
+        assert len(parts) >= 3, f"Unexpected split-layer filename parts: {parts}"
+
+
+def test_cli_optimize_travel_runs(tmp_path):
+    """`png2svg --optimize-travel` on Bluey.png exits 0 and produces valid SVG."""
+    project_root = Path(__file__).parent.parent.parent
+    bluey_png = project_root / "Bluey.png"
+    if not bluey_png.exists():
+        pytest.skip("Bluey.png not found in project root")
+
+    out_svg = tmp_path / "out.svg"
+    result = subprocess.run(
+        [
+            str(VENV_PNG2SVG),
+            str(bluey_png),
+            str(out_svg),
+            "--preset",
+            "fast",
+            "--optimize-travel",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert out_svg.exists()
+    content = out_svg.read_text()
+    assert "<svg" in content
+    assert "<path" in content
+
+
+def test_cli_hatch_angles_parses_csv(small_test_png, tmp_path):
+    """`png2svg --hatch-angles=0,45,90` parses and runs successfully."""
+    out_svg = tmp_path / "out.svg"
+    result = subprocess.run(
+        [
+            str(VENV_PNG2SVG),
+            str(small_test_png),
+            str(out_svg),
+            "--preset",
+            "fast",
+            "--hatch-angles=0,45,90",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert out_svg.exists()
+
+
+def test_cli_hatch_angles_invalid_value_errors(small_test_png, tmp_path):
+    """`png2svg --hatch-angles=foo` exits non-zero with a friendly error."""
+    out_svg = tmp_path / "out.svg"
+    result = subprocess.run(
+        [
+            str(VENV_PNG2SVG),
+            str(small_test_png),
+            str(out_svg),
+            "--hatch-angles=foo",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    err = result.stderr.lower()
+    assert "hatch-angles" in err or "comma-separated" in err or "numbers" in err

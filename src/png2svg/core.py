@@ -15,6 +15,8 @@ Features
 
 import colorsys
 import json
+import math
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -57,6 +59,8 @@ class RenderParams:
     naming_mode: str = "inkscape"
     continuous_paths: bool = False
     arc_radius: float = 0.0
+    hatch_angles: Optional[List[float]] = None
+    hatch_angle: float = 0.0
 
 
 @dataclass
@@ -861,6 +865,168 @@ def _process_single_layer(
     return LayerResult(groups=groups, color_map_entry=map_entry, is_layer_generated=True)
 
 
+def optimize_layer_order(layers: List[Dict[str, Any]], start: Tuple[float, float] = (0.0, 0.0)) -> List[Dict[str, Any]]:
+    """Reorder layers using greedy nearest-neighbor to minimize pen-up travel.
+
+    Parameters
+    ----------
+    layers
+        List of layer dicts, each with a ``path_start`` key holding a
+        ``(x, y)`` tuple of the first coordinate in the layer's first path.
+    start
+        Starting pen position (default: origin).
+
+    Returns
+    -------
+    list
+        Layers reordered by nearest-neighbor heuristic.
+    """
+    if len(layers) <= 1:
+        return list(layers)
+
+    remaining = list(range(len(layers)))
+    ordered: List[Dict[str, Any]] = []
+    current_pos = start
+
+    while remaining:
+        best_idx = None
+        best_dist = float("inf")
+        for idx in remaining:
+            pos = layers[idx].get("path_start", (0.0, 0.0))
+            dist = math.hypot(pos[0] - current_pos[0], pos[1] - current_pos[1])
+            if dist < best_dist:
+                best_dist = dist
+                best_idx = idx
+        if best_idx is not None:
+            remaining.remove(best_idx)
+            ordered.append(layers[best_idx])
+            current_pos = layers[best_idx].get("path_start", current_pos)
+
+    return ordered
+
+
+def _extract_path_start(d_string: str) -> Tuple[float, float]:
+    """Extract the first (x, y) coordinate from an SVG path 'd' attribute.
+
+    Looks for the first 'M' command and returns its coordinates.
+    Returns (0.0, 0.0) if no move command is found.
+    """
+    match = re.search(r"M\s*([0-9.eE+-]+)\s+([0-9.eE+-]+)", d_string)
+    if match:
+        return (float(match.group(1)), float(match.group(2)))
+    return (0.0, 0.0)
+
+
+def _rotate_path(d_string: str, angle_deg: float, cx: float, cy: float) -> str:
+    """Rotate an SVG path by the given angle around (cx, cy).
+
+    Applies a rotation transform by transforming all coordinate pairs
+    in the path string. Uses the standard 2D rotation matrix.
+
+    Note: The actual rotation is applied via SVG group transforms in
+    process_image_to_hatched_svg. This function is kept as a utility
+    placeholder for future per-coordinate rotation.
+    """
+    if abs(angle_deg) < 0.001:
+        return d_string
+
+    # Rotation is applied via SVG transform="rotate(...)" on group elements,
+    # not by transforming individual coordinates. Return as-is.
+    return d_string
+
+
+def render_single_layer_svg(
+    input_path: Path,
+    params: RenderParams,
+    marker_palette: Optional[Dict[str, Any]],
+    color_map: Optional[Dict[str, Any]],
+    pal_hex: str,
+    output_path: Path,
+) -> Optional[str]:
+    """Re-render a single color layer as its own SVG file.
+
+    This is used by ``--split-layers`` to write one SVG per color.
+
+    Parameters
+    ----------
+    input_path
+        Path to the original input image.
+    params
+        Render parameters (with per-layer ``hatch_angle`` set if applicable).
+    marker_palette
+        Marker palette (same as the main render).
+    color_map
+        Color map (same as the main render).
+    pal_hex
+        The hex key of the layer to render (e.g. ``#FF0000``).
+    output_path
+        Where to write the SVG file.
+
+    Returns
+    -------
+    str or None
+        The SVG content written, or None if the layer was skipped.
+    """
+    img = Image.open(input_path).convert("RGBA")
+
+    if abs(params.scale - 1.0) > 1e-6:
+        w0, h0 = img.size
+        w1 = max(1, int(w0 * params.scale))
+        h1 = max(1, int(h0 * params.scale))
+        img = img.resize((w1, h1), Image.Resampling.LANCZOS)
+
+    rgba = np.array(img)
+    orig_rgb = rgba[:, :, :3]
+    alpha = rgba[:, :, 3]
+    H, W = rgba.shape[0], rgba.shape[1]  # noqa: N806
+
+    color_idx, palette, visible = build_color_index_map(orig_rgb, alpha, params.alpha_threshold, params.max_palette)
+
+    # Find the palette index for the requested pal_hex
+    target_idx = None
+    for idx_int, rgb in enumerate(palette):
+        hex_key = "#" + rgb_to_hex(rgb)
+        if hex_key.upper() == pal_hex.upper():
+            target_idx = idx_int
+            break
+
+    if target_idx is None:
+        return None
+
+    mask = (color_idx == target_idx) & visible
+    rgb = palette[target_idx]
+
+    marker_counters: Dict[str, int] = {}
+    result = _process_single_layer(target_idx, rgb, mask, params, marker_counters, marker_palette, color_map)
+
+    if not result.is_layer_generated or not result.groups:
+        return None
+
+    # Build SVG with rotation transform if hatch_angle != 0
+    all_groups_str = "".join(result.groups)
+    W_int = int(round(W))  # noqa: N806
+    H_int = int(round(H))  # noqa: N806
+
+    if abs(params.hatch_angle) > 0.001:
+        # Wrap all groups in a rotation transform
+        cx = W_int / 2.0
+        cy = H_int / 2.0
+        transform = f' transform="rotate({params.hatch_angle:.2f},{cx:.2f},{cy:.2f})"'
+        group_wrap = f"<g{transform}>\n{all_groups_str}</g>\n"
+    else:
+        group_wrap = all_groups_str
+
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'width="{W_int}" height="{H_int}" viewBox="0 0 {W_int} {H_int}">\n'
+        f"{group_wrap}</svg>\n"
+    )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(svg, encoding="utf-8")
+    return svg
+
+
 def process_image_to_hatched_svg(
     input_path: Path,
     output_path: Path,
@@ -869,6 +1035,7 @@ def process_image_to_hatched_svg(
     color_map: Optional[Dict[str, Any]] = None,
     show_progress: bool = False,
     show_stats: bool = False,
+    optimize_travel: bool = False,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Render SVG and return a color_map_used dict for session saving.
@@ -931,7 +1098,7 @@ def process_image_to_hatched_svg(
     rgba = np.array(img)
     orig_rgb = rgba[:, :, :3]
     alpha = rgba[:, :, 3]
-    H, W = visible.shape if "visible" in dir() else (rgba.shape[0], rgba.shape[1])  # noqa: F821, N806
+    H, W = rgba.shape[0], rgba.shape[1]  # noqa: N806
     processing_stats["image_dimensions"] = (W, H)
 
     # Step 2: Quantizing colors
@@ -961,11 +1128,14 @@ def process_image_to_hatched_svg(
     if params.skip_bg:
         bg_idx = _detect_background(visible, color_idx, palette)
 
-    all_groups = []
+    all_groups: List[str] = []
     layers_count = 0
 
-    color_map_used = {}
-    marker_counters = {}
+    color_map_used: Dict[str, Any] = {}
+    marker_counters: Dict[str, int] = {}
+
+    # Collect layer data for potential reordering
+    layer_data: List[Dict[str, Any]] = []
 
     # Step 4: Processing layers
     total_layers = len(used)
@@ -986,10 +1156,20 @@ def process_image_to_hatched_svg(
                 rgb = palette[idx_int]
                 pal_hex = "#" + rgb_to_hex(rgb)
 
+                # Determine per-layer hatch_angle
+                if params.hatch_angles:
+                    angles_list = params.hatch_angles
+                    layer_angle = angles_list[min(layers_count, len(angles_list) - 1)] if angles_list else 0.0
+                else:
+                    layer_angle = params.hatch_angle
+
+                # Build per-layer params with hatch_angle
+                layer_params = RenderParams(**{**params.__dict__, "hatch_angle": layer_angle})
+
                 # Compute layer stats if requested
                 layer_stat = None
                 if show_stats:
-                    layer_stat = compute_layer_stats(mask, params.line_step)
+                    layer_stat = compute_layer_stats(mask, layer_params.line_step)
                     layer_stat["color_name"] = rough_color_name(rgb)
                     layer_stat["hex"] = pal_hex
                     processing_stats["total_segments"] += layer_stat["segments"]
@@ -997,10 +1177,29 @@ def process_image_to_hatched_svg(
                     processing_stats["optimized_pen_lifts"] += layer_stat["optimized_lifts"]
                     processing_stats["layer_stats"].append(layer_stat)
 
-                result = _process_single_layer(idx_int, rgb, mask, params, marker_counters, marker_palette, color_map)
+                result = _process_single_layer(
+                    idx_int, rgb, mask, layer_params, marker_counters, marker_palette, color_map
+                )
 
                 if result.is_layer_generated and result.color_map_entry:
-                    all_groups.extend(result.groups)
+                    # Extract path start for optimize_travel
+                    path_start = (0.0, 0.0)
+                    if result.groups:
+                        # Find first path's start coordinate
+                        first_group = result.groups[0]
+                        match = re.search(r'd="([^"]*)"', first_group)
+                        if match:
+                            path_start = _extract_path_start(match.group(1))
+
+                    layer_data.append(
+                        {
+                            "groups": result.groups,
+                            "color_map_entry": result.color_map_entry,
+                            "pal_hex": pal_hex,
+                            "hatch_angle": layer_angle,
+                            "path_start": path_start,
+                        }
+                    )
                     color_map_used[pal_hex] = result.color_map_entry
                     if result.groups:
                         layers_count += 1
@@ -1019,9 +1218,19 @@ def process_image_to_hatched_svg(
             rgb = palette[idx_int]
             pal_hex = "#" + rgb_to_hex(rgb)
 
+            # Determine per-layer hatch_angle
+            if params.hatch_angles:
+                angles_list = params.hatch_angles
+                layer_angle = angles_list[min(layers_count, len(angles_list) - 1)] if angles_list else 0.0
+            else:
+                layer_angle = params.hatch_angle
+
+            # Build per-layer params with hatch_angle
+            layer_params = RenderParams(**{**params.__dict__, "hatch_angle": layer_angle})
+
             # Compute layer stats if requested
             if show_stats:
-                layer_stat = compute_layer_stats(mask, params.line_step)
+                layer_stat = compute_layer_stats(mask, layer_params.line_step)
                 layer_stat["color_name"] = rough_color_name(rgb)
                 layer_stat["hex"] = pal_hex
                 processing_stats["total_segments"] += layer_stat["segments"]
@@ -1029,33 +1238,76 @@ def process_image_to_hatched_svg(
                 processing_stats["optimized_pen_lifts"] += layer_stat["optimized_lifts"]
                 processing_stats["layer_stats"].append(layer_stat)
 
-            result = _process_single_layer(idx_int, rgb, mask, params, marker_counters, marker_palette, color_map)
+            result = _process_single_layer(idx_int, rgb, mask, layer_params, marker_counters, marker_palette, color_map)
 
             if result.is_layer_generated and result.color_map_entry:
-                all_groups.extend(result.groups)
+                # Extract path start for optimize_travel
+                path_start = (0.0, 0.0)
+                if result.groups:
+                    first_group = result.groups[0]
+                    match = re.search(r'd="([^"]*)"', first_group)
+                    if match:
+                        path_start = _extract_path_start(match.group(1))
+
+                layer_data.append(
+                    {
+                        "groups": result.groups,
+                        "color_map_entry": result.color_map_entry,
+                        "pal_hex": pal_hex,
+                        "hatch_angle": layer_angle,
+                        "path_start": path_start,
+                    }
+                )
                 color_map_used[pal_hex] = result.color_map_entry
                 if result.groups:
                     layers_count += 1
+
+    # --optimize-travel: reorder layers by nearest-neighbor
+    if optimize_travel and len(layer_data) > 1:
+        # Use image center as start position
+        start_pos = (W / 2.0, H / 2.0)
+        layer_data = optimize_layer_order(layer_data, start=start_pos)
+        # Rebuild color_map_used in optimized order
+        color_map_used = {}
+        for ld in layer_data:
+            color_map_used[ld["pal_hex"]] = ld["color_map_entry"]
 
     processing_stats["layers_generated"] = layers_count
 
     if layers_count == 0:
         raise SystemExit("No layers produced.")
 
-    # Step 5: Writing SVG
+    # Assemble groups with optional rotation transforms for hatch_angle
+    for ld in layer_data:
+        angle = ld.get("hatch_angle", 0.0)
+        if abs(angle) > 0.001:
+            # Wrap layer groups in a rotation transform
+            cx = W / 2.0
+            cy = H / 2.0
+            transform = f' transform="rotate({angle:.2f},{cx:.2f},{cy:.2f})"'
+            all_groups.append(f"<g{transform}>\n")
+            all_groups.extend(ld["groups"])
+            all_groups.append("</g>\n")
+        else:
+            all_groups.extend(ld["groups"])
+
+    # Step 5: Writing SVG — viewBox uses integer dimensions
+    W_int = int(round(W))  # noqa: N806
+    H_int = int(round(H))  # noqa: N806
+
     if use_progress:
         with progress:
             task5 = progress.add_task("[5/5] Writing SVG...", total=1)
             svg = (
                 f'<svg xmlns="http://www.w3.org/2000/svg" '
-                f'width="{W}" height="{H}" viewBox="0 0 {W} {H}">\n' + "".join(all_groups) + "</svg>\n"
+                f'width="{W_int}" height="{H_int}" viewBox="0 0 {W_int} {H_int}">\n' + "".join(all_groups) + "</svg>\n"
             )
             output_path.write_text(svg, encoding="utf-8")
             progress.update(task5, completed=1)
     else:
         svg = (
             f'<svg xmlns="http://www.w3.org/2000/svg" '
-            f'width="{W}" height="{H}" viewBox="0 0 {W} {H}">\n' + "".join(all_groups) + "</svg>\n"
+            f'width="{W_int}" height="{H_int}" viewBox="0 0 {W_int} {H_int}">\n' + "".join(all_groups) + "</svg>\n"
         )
         output_path.write_text(svg, encoding="utf-8")
 
@@ -1093,6 +1345,8 @@ def _load_config_session(args) -> Tuple[RenderParams, Optional[Dict], Optional[D
         naming_mode=p_dict.get("naming_mode", "inkscape"),
         continuous_paths=p_dict.get("continuous_paths", False),
         arc_radius=p_dict.get("arc_radius", 0.0),
+        hatch_angles=p_dict.get("hatch_angles", None),
+        hatch_angle=p_dict.get("hatch_angle", 0.0),
     )
     color_map = session["color_map"]
 
@@ -1213,6 +1467,8 @@ def _load_config_cli_with_preset(
         naming_mode=merged.get("naming_mode", "inkscape"),
         continuous_paths=merged.get("continuous_paths", False),
         arc_radius=merged.get("arc_radius", 0.0),
+        hatch_angles=merged.get("hatch_angles", None),
+        hatch_angle=merged.get("hatch_angle", 0.0),
     )
 
     # Load palette if provided (not affected by preset)

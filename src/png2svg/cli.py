@@ -1,7 +1,9 @@
 """Command-line interface for png2svg."""
 
 import argparse
+import re
 import sys
+import webbrowser
 from pathlib import Path
 
 from png2svg import __version__
@@ -10,6 +12,7 @@ from png2svg.core import (
     _display_stats_table,
     get_run_configuration,
     process_image_to_hatched_svg,
+    render_single_layer_svg,
     save_session,
 )
 from png2svg.presets import PRESETS, list_presets
@@ -39,9 +42,101 @@ SUPPORTED_INPUT_FORMATS = (
 )
 
 
+def _sanitize_filename(name: str) -> str:
+    """Sanitize a marker name for use in filenames.
+
+    Lowercase, replace whitespace and any char not in [a-z0-9_-] with _,
+    collapse runs of underscores.
+    """
+    name = name.lower().strip()
+    name = re.sub(r"[^a-z0-9_-]", "_", name)
+    name = re.sub(r"_+", "_", name)
+    return name or "unnamed"
+
+
+def _write_split_layers(
+    input_path: Path,
+    output_path: Path,
+    params,
+    marker_palette,
+    color_map,
+    color_map_used: dict,
+) -> None:
+    """Write one SVG file per color layer alongside the main output."""
+    from png2svg.core import RenderParams
+
+    stem = output_path.stem
+    out_dir = output_path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Track used slugs to handle collisions (e.g. two layers named "blue")
+    used_slugs: dict[str, int] = {}
+    layer_idx = 0
+
+    for pal_hex, entry in color_map_used.items():
+        marker_name = entry.get("marker_name", "unnamed") or "unnamed"
+        slug = _sanitize_filename(marker_name)
+
+        # Handle slug collisions by appending -N
+        if slug in used_slugs:
+            used_slugs[slug] += 1
+            slug = f"{slug}-{used_slugs[slug]}"
+        else:
+            used_slugs[slug] = 1
+
+        # Determine hatch_angle for this layer
+        if params.hatch_angles:
+            angles = params.hatch_angles
+            angle = angles[min(layer_idx, len(angles) - 1)] if angles else 0.0
+        else:
+            angle = 0.0
+
+        # Build per-layer params
+        layer_params = RenderParams(**{**params.__dict__, "hatch_angles": params.hatch_angles, "hatch_angle": angle})
+
+        # Compute the layer index format (2 digits for <100 layers, 3 for 100+)
+        idx_fmt = "03" if len(color_map_used) > 99 else "02"
+        filename = f"{stem}_{layer_idx:{idx_fmt}}_{slug}.svg"
+        layer_path = out_dir / filename
+
+        svg_content = render_single_layer_svg(
+            input_path=input_path,
+            params=layer_params,
+            marker_palette=marker_palette,
+            color_map=color_map,
+            pal_hex=pal_hex,
+            output_path=layer_path,
+        )
+        if svg_content is not None:
+            print(f"  Split layer: {layer_path}")
+
+        layer_idx += 1
+
+
 def main():
     """Entry point for the `png2svg` console script."""
     formats_help = " | ".join(SUPPORTED_INPUT_FORMATS)
+    _examples = (
+        "\nExamples:\n"
+        "```\n"
+        "# Quick default conversion\n"
+        "png2svg photo.jpg out.svg\n"
+        "\n"
+        "# Preset with override\n"
+        "png2svg drawing.png out.svg --preset logo --line-step 2\n"
+        "\n"
+        "# Custom marker palette\n"
+        "png2svg photo.jpg out.svg --palette-file markers.json\n"
+        "\n"
+        "# Split layers and preview\n"
+        "png2svg photo.jpg out.svg --split-layers --preview\n"
+        "\n"
+        "# Session reproducibility\n"
+        "png2svg photo.jpg out.svg --save-session && \\\n"
+        "  png2svg photo.jpg out2.svg --use-session out.svg.session.json\n"
+        "```\n"
+    )
+
     p = argparse.ArgumentParser(
         prog="png2svg",
         description=(
@@ -50,7 +145,8 @@ def main():
         epilog=(
             "Presets:\n"
             + "\n".join(f"  {name}: {spec['description']}" for name, spec in sorted(PRESETS.items()))
-            + "\n\nUse --help for the full list of flags."
+            + "\n"
+            + _examples
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -159,6 +255,31 @@ def main():
     p.add_argument("--use-session", help="Load previous session JSON for reproducible output")
     p.add_argument("--progress", action="store_true", help="Show progress bars (requires rich)")
     p.add_argument("--stats", action="store_true", help="Show processing statistics")
+    p.add_argument(
+        "--preview",
+        action="store_true",
+        help="Open output SVG in default viewer after render",
+    )
+    p.add_argument(
+        "--split-layers",
+        action="store_true",
+        help="Also write one SVG file per color layer to <stem>_<NN>_<color>.svg",
+    )
+    p.add_argument(
+        "--optimize-travel",
+        action="store_true",
+        help="Reorder layers to minimize pen-up travel distance",
+    )
+    p.add_argument(
+        "--hatch-angles",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated hatch angles per layer in degrees. "
+            "If fewer angles than layers, the last value is reused. "
+            "Example: --hatch-angles=0,45,90,135"
+        ),
+    )
 
     a = p.parse_args()
 
@@ -185,6 +306,21 @@ def main():
         )
         sys.exit(1)
 
+    # Parse --hatch-angles into a list of floats
+    hatch_angles: list[float] = []
+    if a.hatch_angles is not None:
+        raw = a.hatch_angles.strip()
+        if raw:
+            try:
+                hatch_angles = [float(v) for v in raw.split(",")]
+            except ValueError:
+                print(
+                    f"Error: --hatch-angles must be comma-separated numbers, got: {a.hatch_angles!r}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+        # Empty string → treat as default (no rotation)
+
     # Load configuration — wrap with friendly error handling.
     # If --preset is set, the preset's overrides are applied as a base, then
     # any explicit CLI flags on top of it. So `png2svg img out --preset logo
@@ -202,6 +338,10 @@ def main():
         print(f"Error: file not found: {e.filename}", file=sys.stderr)
         sys.exit(1)
 
+    # Override hatch_angles on params if the user specified --hatch-angles
+    if hatch_angles:
+        params.hatch_angles = hatch_angles
+
     # Run Process — wrap with friendly error handling
     try:
         color_map_used, processing_stats = process_image_to_hatched_svg(
@@ -212,6 +352,7 @@ def main():
             color_map,
             show_progress=a.progress,
             show_stats=a.stats,
+            optimize_travel=a.optimize_travel,
         )
     except SystemExit as e:
         # core.py raises SystemExit with cryptic strings; translate them
@@ -238,9 +379,32 @@ def main():
     if a.stats:
         _display_stats_table(processing_stats)
 
+    # --split-layers: write one SVG per color layer
+    if a.split_layers:
+        _write_split_layers(
+            input_path=input_path,
+            output_path=output_path,
+            params=params,
+            marker_palette=marker_palette,
+            color_map=color_map,
+            color_map_used=color_map_used,
+        )
+
     if a.save_session:
         session_out_path = output_path.with_suffix(output_path.suffix + ".session.json")
         save_session(session_out_path, input_path, palette_file, params, color_map_used)
+
+    # --preview: open the main output SVG in the default viewer
+    if a.preview:
+        try:
+            uri = output_path.resolve().as_uri()
+            opened = webbrowser.open(uri)
+            if not opened:
+                print(f"Warning: could not open browser for {uri}", file=sys.stderr)
+        except Exception as exc:
+            print(f"Warning: --preview failed: {exc}", file=sys.stderr)
+        if a.split_layers:
+            print("Note: --preview opens the main output only (not split-layer files)", file=sys.stderr)
 
 
 if __name__ == "__main__":

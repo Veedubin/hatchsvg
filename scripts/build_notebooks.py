@@ -642,7 +642,7 @@ def build_craft() -> nbf.NotebookNode:
             "- Read the source: `src/png2svg/core.py` (the algorithm)",
             "- Read `src/png2svg/presets.py` (preset definitions)",
             "- Read `src/png2svg/cli.py` (the CLI — the notebook helpers wrap the same functions)",
-            "- File an issue: https://github.com/Veedubin/svg-tracer/issues",
+            "- File an issue: https://github.com/Veedubin/hatchsvg/issues",
         ),
     ]
     _assign_stable_ids(nb, "craft")

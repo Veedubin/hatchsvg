@@ -121,5 +121,5 @@ debug iterations to diagnose.
 - Cryptic `SystemExit` errors now show actionable advice
 - Missing `--version` flag
 
-[1.0.0]: https://github.com/Veedubin/svg-tracer/releases/tag/v1.0.0
-[1.1.0]: https://github.com/Veedubin/svg-tracer/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/Veedubin/hatchsvg/releases/tag/v1.0.0
+[1.1.0]: https://github.com/Veedubin/hatchsvg/compare/v1.0.0...v1.1.0

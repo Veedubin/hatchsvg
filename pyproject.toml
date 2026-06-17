@@ -37,9 +37,9 @@ notebook = ["jupyter>=1.1", "ipykernel>=6.0", "matplotlib>=3.5", "nbformat>=5.10
 png2svg = "png2svg.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Veedubin/svg-tracer"
-Repository = "https://github.com/Veedubin/svg-tracer.git"
-Issues = "https://github.com/Veedubin/svg-tracer/issues"
+Homepage = "https://github.com/Veedubin/hatchsvg"
+Repository = "https://github.com/Veedubin/hatchsvg.git"
+Issues = "https://github.com/Veedubin/hatchsvg/issues"
 
 [tool.hatch.version]
 path = "src/png2svg/__init__.py"

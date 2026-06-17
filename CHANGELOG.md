@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-17
+
+### Added
+- **`--preview`** — opens the output SVG in the default system viewer after render (uses stdlib `webbrowser`)
+- **`--split-layers`** — writes one SVG file per color layer alongside the main output (`<stem>_<NN>_<color>.svg`)
+- **`--optimize-travel`** — reorders layers using greedy nearest-neighbor to minimize pen-up travel distance
+- **`--hatch-angles`** — comma-separated hatch rotation per layer in degrees (e.g. `--hatch-angles=0,45,90,135`)
+- **`--help` examples** — 5 inline examples below the presets block in `png2svg --help` output
+- **ViewBox normalization** — viewBox values are now always integer strings (no floats) for Cricut Design Space compatibility
+- **`render_single_layer_svg()`** — new public function in `core.py` for per-layer SVG rendering (used by `--split-layers`)
+- **`optimize_layer_order()`** — new public function in `core.py` for nearest-neighbor layer reordering (used by `--optimize-travel`)
+- **Test count** — 88 → 98 (new tests for all 6 features)
+
+### Changed
+- `RenderParams` gained two additive fields: `hatch_angles: Optional[List[float]]` and `hatch_angle: float` (both backward-compatible defaults)
+- `process_image_to_hatched_svg()` gained an `optimize_travel: bool = False` parameter (backward-compatible)
+
 ## [1.1.1] - 2026-06-16
 
 ### Fixed

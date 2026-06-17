@@ -8,6 +8,15 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/pypi/v/png2svg.svg)](https://pypi.org/project/png2svg/)
 
+## What's new in 1.2.0
+
+- **`--preview`** — open the output SVG in your default viewer after rendering
+- **`--split-layers`** — write one SVG file per color layer (great for drying time between pen passes)
+- **`--optimize-travel`** — reorder layers to minimize pen travel distance (saves plot time)
+- **`--hatch-angles`** — different hatch angles per color layer (reduces visual moiré)
+- **`--help` with examples** — see common invocations without leaving the terminal
+- **Pure Python** — no C compiler required. Works on every platform pip supports.
+
 ## What it does
 
 `png2svg` converts raster images (PNG, JPG, WebP, BMP, GIF, TIFF) into
@@ -85,6 +94,10 @@ See `png2svg --help` for full preset descriptions.
 pip install png2svg
 ```
 
+> **Pure Python**: png2svg has zero C extensions. No compiler needed,
+> no `potracer`/`pypotrace` build failures. Works on Windows, macOS,
+> Linux, ARM, anywhere Python 3.11+ runs.
+
 Optional extras:
 
 ```bash
@@ -126,6 +139,10 @@ png2svg [OPTIONS] INPUT OUTPUT_SVG
 | `--arc-radius N` | 0.0 | Arc radius at U-turns (0 = disabled; try 3-5). |
 | `--save-session` | (off) | Write a `*.session.json` for reproducibility. |
 | `--use-session FILE` | (none) | Replay a previous session (overrides all flags). |
+| `--preview` | (off) | Open output SVG in default viewer after render. |
+| `--split-layers` | (off) | Write one SVG file per color layer. |
+| `--optimize-travel` | (off) | Reorder layers to minimize pen travel distance. |
+| `--hatch-angles ANGLES` | (none) | Comma-separated hatch angles per layer (degrees). |
 | `--progress` | (off) | Show Rich progress bars (requires `pip install png2svg[plot]`). |
 | `--stats` | (off) | Show processing statistics on completion. |
 | `--version` | | Print the version and exit. |

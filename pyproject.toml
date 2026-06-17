@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "png2svg"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Convert PNG images to hatched SVG files for Cricut pen plotters"
 readme = "README.md"
 license = {text = "MIT"}
@@ -37,9 +37,12 @@ notebook = ["jupyter>=1.1", "ipykernel>=6.0", "matplotlib>=3.5", "nbformat>=5.10
 png2svg = "png2svg.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/png2svg/png2svg"
-Repository = "https://github.com/png2svg/png2svg.git"
-Issues = "https://github.com/png2svg/png2svg/issues"
+Homepage = "https://github.com/Veedubin/svg-tracer"
+Repository = "https://github.com/Veedubin/svg-tracer.git"
+Issues = "https://github.com/Veedubin/svg-tracer/issues"
+
+[tool.hatch.version]
+path = "src/png2svg/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/png2svg"]

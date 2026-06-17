@@ -3,10 +3,18 @@
 > **Turn raster images into pen-plotted hatched SVGs.**
 > Optimized for Cricut, Axidraw, and any pen plotter that reads SVG.
 
-[![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/png2svg/png2svg/actions)
+[![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/Veedubin/svg-tracer/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PyPI](https://img.shields.io/pypi/v/png2svg.svg)](https://pypi.org/project/png2svg/)
+
+> **Note**: This is a **hatch generator** for pen plotters, not a **vector
+> outline tracer**. The output is parallel hatched lines, one color layer
+> per detected color, mapped to physical marker strokes. If you want
+> potrace-style vector outlines from a bitmap, use
+> [`vtracer`](https://github.com/visioncortex/vtracer) or
+> [`potrace`](https://potrace.sourceforge.net/) — they solve a different
+> problem and produce different output.
 
 ## What it does
 
@@ -94,7 +102,7 @@ pip install png2svg[plot]    # progress bars (rich) + scipy for component chaini
 For development:
 
 ```bash
-git clone https://github.com/png2svg/png2svg
+git clone https://github.com/Veedubin/svg-tracer
 cd png2svg
 python -m venv .venv
 .venv/bin/pip install -e ".[dev,plot]"

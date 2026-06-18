@@ -98,7 +98,28 @@ pip install hatchsvg
 Optional extras:
 
 ```bash
-pip install hatchsvg[plot]    # progress bars (rich) + scipy for component chaining
+pip install hatchsvg[plot]      # progress bars (rich) + scipy for component chaining
+pip install hatchsvg[palette]   # Streamlit app to build custom palettes from photos
+```
+
+### Building a custom palette
+
+If you have a set of physical markers (Crayola, Jot, Copic, Sharpie, whatever),
+you can take a photo and turn it into a `hatchsvg` palette JSON in ~30 seconds:
+
+```bash
+pip install hatchsvg[palette]
+streamlit run scripts/palette_extractor.py
+```
+
+Upload a photo of your markers, edit the names, click **Download palette JSON**,
+and pass it to `hatchsvg` via `--palette-file`. You can also download a
+standalone HTML preview to keep alongside the JSON for visual reference:
+
+```bash
+# Generate the JSON via the Streamlit app, then:
+python scripts/palette_preview.py my_palette.json
+# Writes my_palette.html — open in any browser.
 ```
 
 For development:

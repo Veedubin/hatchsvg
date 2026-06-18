@@ -85,6 +85,9 @@ ROADMAP.md
 SETUP.md
 TASKS.md
 
+# AI session memory backup (when memini-ai MCP transport is down)
+.session-memory/
+
 # Notebook runtime outputs (created when users run the notebooks)
 # Keep the *_executed.ipynb files (committed for reviewers) but
 # exclude user-generated outputs that appear in the working tree

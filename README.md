@@ -10,7 +10,7 @@
 
 ## What's new in 2.0.0
 
-- **Package renamed to `hatchsvg`** (was `png2svg`). Matches the repo name. See the [migration guide in CHANGELOG.md](CHANGELOG.md#200---2026-06-17) — `pip install hatchsvg`, `import hatchsvg`, `hatchsvg photo.jpg out.svg`.
+- **Package renamed to `hatchsvg`** (was `png2svg`). Matches the repo name. Install: `pip install hatchsvg`. Use: `hatchsvg photo.jpg out.svg`.
 - All v1.2.0 features still ship: `--preview`, `--split-layers`, `--optimize-travel`, `--hatch-angles`, plus 5 inline examples in `--help`.
 - **Pure Python** — no C compiler required. Works on every platform pip supports.
 

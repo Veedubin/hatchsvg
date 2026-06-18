@@ -7,59 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2026-06-17
 
-### ⚠️ BREAKING CHANGE: rename `png2svg` → `hatchsvg`
-
-The package has been renamed from `png2svg` to `hatchsvg` to match
-the GitHub repository name (`github.com/Veedubin/hatchsvg`) and to
-better describe the algorithm. **The repo was renamed to `hatchsvg`
-in v1.1.1; this release brings the package in line.**
-
-### Migration guide
-
-| Old (v1.2.0) | New (v2.0.0) |
-|--------------|--------------|
-| `pip install png2svg` | `pip install hatchsvg` |
-| `import png2svg` | `import hatchsvg` |
-| `png2svg photo.jpg out.svg` | `hatchsvg photo.jpg out.svg` |
-| `python -m png2svg` | `python -m hatchsvg` |
-| `from png2svg.core import ...` | `from hatchsvg.core import ...` |
-| `from png2svg.presets import ...` | `from hatchsvg.presets import ...` |
-| `src/png2svg/` directory | `src/hatchsvg/` directory |
-| Internal attribute `_png2svg_parser` | `_hatchsvg_parser` |
-
-### Why a major bump (v2.0.0)?
-
-Per [SemVer](https://semver.org/), any backward-incompatible change
-to the public API requires a major version bump. The rename touches:
-
-- **PyPI package name** (`pip install` no longer finds `png2svg`)
-- **Import name** (`import png2svg` raises `ModuleNotFoundError`)
-- **CLI command** (`png2svg` command no longer exists)
-- **Module path** (`python -m png2svg` fails)
-
-The CLI flags, file output, session JSON schema, palette JSON
-schema, and Python API function signatures are unchanged.
-
-### What did NOT change
-
-- 114 tests still pass
-- Golden file is byte-identical
-- All v1.2.0 CLI flags work the same
-- Output SVG format unchanged
-
-### Migration shim
-
-A compatibility shim is **not** shipped in v2.0.0. If you need to
-keep `png2svg` working for existing scripts, add this to your
-project's `requirements.txt`:
-
-```
-hatchsvg>=2.0.0
-```
-
-Then in your code, change `import png2svg` to `import hatchsvg as png2svg`.
-A standalone `png2svg` PyPI shim package that depends on `hatchsvg`
-may be added in v2.1.0 if user demand warrants it.
+### Changed
+- **Package renamed from `png2svg` to `hatchsvg`** to match the GitHub repository. `pip install hatchsvg`, `import hatchsvg`, `hatchsvg` CLI command. No other changes — all v1.2.0 features and the golden file output are unchanged.
 
 ## [1.2.0] - 2026-06-17
 

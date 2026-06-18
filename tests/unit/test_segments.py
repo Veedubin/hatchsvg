@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from png2svg.core import find_segments_in_row
+from hatchsvg.core import find_segments_in_row
 
 
 def test_find_segments_in_row_empty():

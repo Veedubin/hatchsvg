@@ -1407,7 +1407,7 @@ def get_run_configuration(
         Parsed argparse ``Namespace`` (or any object exposing the same
         attribute names).
     preset_name
-        Optional name of a :mod:`png2svg.presets` entry. Preset values are
+        Optional name of a :mod:`hatchsvg.presets` entry. Preset values are
         applied as a base; any explicit CLI flags override them. Ignored when
         ``args.use_session`` is set, since session files already encode the
         full configuration.
@@ -1430,7 +1430,7 @@ def _load_config_cli_with_preset(
     ``line_step`` is 2 (overridden) and whose ``max_palette`` is 6 (from
     preset, since the user didn't pass ``--max-palette``).
     """
-    from png2svg.presets import PRESETS
+    from hatchsvg.presets import PRESETS
 
     if preset_name not in PRESETS:
         raise ValueError(f"Unknown preset '{preset_name}'. Available: {', '.join(sorted(PRESETS.keys()))}")
@@ -1497,7 +1497,7 @@ def _extract_explicit_args(args) -> Dict[str, Any]:
     action's default. Anything that differs is treated as explicit. For
     store_true flags, presence (value=True) is explicit; absence is not.
 
-    The parser instance must be attached to ``args`` as ``_png2svg_parser``
+    The parser instance must be attached to ``args`` as ``_hatchsvg_parser``
     (the CLI does this so we don't have to walk the call stack).
 
     Returns
@@ -1509,7 +1509,7 @@ def _extract_explicit_args(args) -> Dict[str, Any]:
     """
     import argparse as _argparse
 
-    parser = getattr(args, "_png2svg_parser", None)
+    parser = getattr(args, "_hatchsvg_parser", None)
     explicit: Dict[str, Any] = {}
     if parser is None:
         return explicit

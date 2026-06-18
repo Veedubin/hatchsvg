@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from png2svg.core import RenderParams, process_image_to_hatched_svg
+from hatchsvg.core import RenderParams, process_image_to_hatched_svg
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 BLUEY_PATH = REPO_ROOT / "Bluey.png"
@@ -25,7 +25,7 @@ GOLDEN_PATH = Path(__file__).parent.parent / "fixtures" / "bluey_golden.svg"
 #
 # If the algorithm changes intentionally, regenerate the golden file with:
 #
-#   .venv/bin/png2svg Bluey.png tests/fixtures/bluey_golden.svg \
+#   .venv/bin/hatchsvg Bluey.png tests/fixtures/bluey_golden.svg \
 #       --continuous-paths --arc-radius 5 \
 #       --max-palette 4 --line-step 10
 #
@@ -67,7 +67,7 @@ def test_e2e_bluey_golden():
             f"  Expected length: {len(expected)}\n"
             f"  Actual length:   {len(actual)}\n"
             f"  If this is an intentional algorithm change, regenerate:\n"
-            f"    .venv/bin/png2svg Bluey.png {GOLDEN_PATH} "
+            f"    .venv/bin/hatchsvg Bluey.png {GOLDEN_PATH} "
             f"--continuous-paths --arc-radius 5 "
             f"--max-palette {GOLDEN_PARAMS.max_palette} "
             f"--line-step {GOLDEN_PARAMS.line_step}"

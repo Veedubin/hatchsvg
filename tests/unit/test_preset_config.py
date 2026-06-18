@@ -4,15 +4,15 @@ import argparse
 
 import pytest
 
-from png2svg.core import get_run_configuration
+from hatchsvg.core import get_run_configuration
 
 
 def _make_args(**overrides):
     """Build a minimal argparse Namespace matching the CLI's attribute names.
 
-    The CLI attaches the parser as ``_png2svg_parser`` so core can diff explicit
+    The CLI attaches the parser as ``_hatchsvg_parser`` so core can diff explicit
     args. We mirror that contract here. Defaults come from the CLI's argparse
-    spec (see ``src/png2svg/cli.py``).
+    spec (see ``src/hatchsvg/cli.py``).
     """
     defaults = {
         "input": "in.png",
@@ -43,8 +43,8 @@ def _make_args(**overrides):
     # Build a real parser so _extract_explicit_args can introspect defaults
     import sys
 
-    if "png2svg.cli" in sys.modules:
-        from png2svg.cli import main as _cli_main  # noqa: F401
+    if "hatchsvg.cli" in sys.modules:
+        from hatchsvg.cli import main as _cli_main  # noqa: F401
 
     p = argparse.ArgumentParser()
     p.add_argument("input")
@@ -71,7 +71,7 @@ def _make_args(**overrides):
     p.add_argument("--stats", action="store_true")
 
     args = argparse.Namespace(**defaults)
-    args._png2svg_parser = p
+    args._hatchsvg_parser = p
     return args
 
 

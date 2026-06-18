@@ -1,4 +1,4 @@
-"""Command-line interface for png2svg."""
+"""Command-line interface for hatchsvg."""
 
 import argparse
 import re
@@ -6,8 +6,8 @@ import sys
 import webbrowser
 from pathlib import Path
 
-from png2svg import __version__
-from png2svg.core import (
+from hatchsvg import __version__
+from hatchsvg.core import (
     HAS_RICH,
     _display_stats_table,
     get_run_configuration,
@@ -15,7 +15,7 @@ from png2svg.core import (
     render_single_layer_svg,
     save_session,
 )
-from png2svg.presets import PRESETS, list_presets
+from hatchsvg.presets import PRESETS, list_presets
 
 _ERROR_HINTS = {
     "No layers produced.": (
@@ -63,7 +63,7 @@ def _write_split_layers(
     color_map_used: dict,
 ) -> None:
     """Write one SVG file per color layer alongside the main output."""
-    from png2svg.core import RenderParams
+    from hatchsvg.core import RenderParams
 
     stem = output_path.stem
     out_dir = output_path.parent
@@ -114,31 +114,31 @@ def _write_split_layers(
 
 
 def main():
-    """Entry point for the `png2svg` console script."""
+    """Entry point for the `hatchsvg` console script."""
     formats_help = " | ".join(SUPPORTED_INPUT_FORMATS)
     _examples = (
         "\nExamples:\n"
         "```\n"
         "# Quick default conversion\n"
-        "png2svg photo.jpg out.svg\n"
+        "hatchsvg photo.jpg out.svg\n"
         "\n"
         "# Preset with override\n"
-        "png2svg drawing.png out.svg --preset logo --line-step 2\n"
+        "hatchsvg drawing.png out.svg --preset logo --line-step 2\n"
         "\n"
         "# Custom marker palette\n"
-        "png2svg photo.jpg out.svg --palette-file markers.json\n"
+        "hatchsvg photo.jpg out.svg --palette-file markers.json\n"
         "\n"
         "# Split layers and preview\n"
-        "png2svg photo.jpg out.svg --split-layers --preview\n"
+        "hatchsvg photo.jpg out.svg --split-layers --preview\n"
         "\n"
         "# Session reproducibility\n"
-        "png2svg photo.jpg out.svg --save-session && \\\n"
-        "  png2svg photo.jpg out2.svg --use-session out.svg.session.json\n"
+        "hatchsvg photo.jpg out.svg --save-session && \\\n"
+        "  hatchsvg photo.jpg out2.svg --use-session out.svg.session.json\n"
         "```\n"
     )
 
     p = argparse.ArgumentParser(
-        prog="png2svg",
+        prog="hatchsvg",
         description=(
             f"Convert images to hatched SVG files for Cricut pen plotters. Accepts input formats: {formats_help}."
         ),
@@ -164,7 +164,7 @@ def main():
     p.add_argument(
         "--version",
         action="version",
-        version=f"png2svg {__version__}",
+        version=f"hatchsvg {__version__}",
     )
     p.add_argument(
         "--max-palette",
@@ -285,7 +285,7 @@ def main():
 
     # Attach the parser to args so core._extract_explicit_args can diff
     # explicit CLI flags against parser defaults (used by --preset).
-    a._png2svg_parser = p  # type: ignore[attr-defined]
+    a._hatchsvg_parser = p  # type: ignore[attr-defined]
 
     # Check for Rich if --progress is requested
     if a.progress and not HAS_RICH:
@@ -323,7 +323,7 @@ def main():
 
     # Load configuration — wrap with friendly error handling.
     # If --preset is set, the preset's overrides are applied as a base, then
-    # any explicit CLI flags on top of it. So `png2svg img out --preset logo
+    # any explicit CLI flags on top of it. So `hatchsvg img out --preset logo
     # --line-step 2` gives a logo preset with line_step=2.
     try:
         params, marker_palette, color_map, palette_file = get_run_configuration(a, preset_name=a.preset)

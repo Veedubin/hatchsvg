@@ -1,11 +1,11 @@
-# png2svg — Tutorial Notebooks
+# hatchsvg — Tutorial Notebooks
 
-Three Jupyter notebooks that walk through png2svg at increasing levels of
+Three Jupyter notebooks that walk through hatchsvg at increasing levels of
 depth. **All three are tested to execute end-to-end on the shipped `Bluey.png`.**
 
 ## Start here
 
-**New to png2svg?** Open `quickstart.ipynb` first. 5 cells, ~5 minutes.
+**New to hatchsvg?** Open `quickstart.ipynb` first. 5 cells, ~5 minutes.
 
 **Want to understand what's actually happening?** Open `explore.ipynb`. 6 code
 cells, 30-60 minutes. Has the 4-stage walkthrough with explanations and 2a/2b/2c
@@ -79,11 +79,11 @@ user can't see what the program is doing. Notebooks are different:
 
 - **No magic.** Every cell shows exactly what code runs. Click into
   `notebook_helpers.py` to see what the helper does.
-- **Bypassable.** Don't like the helper? Call `png2svg.core` directly.
+- **Bypassable.** Don't like the helper? Call `hatchsvg.core` directly.
   Edit the helper. Edit the cell. Whatever.
 - **Forkable.** If you want a custom stage, copy a cell, modify it,
   save the modified notebook. We won't break your changes.
-- **Diffable.** When png2svg updates, you can `git diff` the
+- **Diffable.** When hatchsvg updates, you can `git diff` the
   `.ipynb` file and see exactly what changed in the explanations.
 
 The trade-off: notebooks require the user to be comfortable with Python.

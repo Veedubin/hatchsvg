@@ -1,10 +1,10 @@
-"""Shared helpers for the png2svg tutorial notebooks.
+"""Shared helpers for the hatchsvg tutorial notebooks.
 
 This module is intentionally short and direct. It is NOT a black box.
 
-Every function here is a thin wrapper around something in :mod:`png2svg.core`
-or :mod:`png2svg.presets`. If you want to understand what the function is
-actually doing, click into the ``png2svg.core`` call and read the source.
+Every function here is a thin wrapper around something in :mod:`hatchsvg.core`
+or :mod:`hatchsvg.presets`. If you want to understand what the function is
+actually doing, click into the ``hatchsvg.core`` call and read the source.
 
 The helpers exist to keep the notebooks focused on explanations (markdown
 cells) and decisions (parameters), not on boilerplate (file I/O, base64
@@ -15,12 +15,12 @@ Design principles
 - **No magic.** Every function has explicit parameters. There are no
   environment variables, no implicit state, no hidden defaults.
 - **Read the imports.** If a helper imports something from
-  ``png2svg.core``, the underlying algorithm is in core. The helper is
+  ``hatchsvg.core``, the underlying algorithm is in core. The helper is
   just plumbing.
 - **Fail loud.** Functions raise the original exception. We do not
   swallow errors in the name of "user-friendliness." When something
   breaks in a notebook cell, the traceback is the explanation.
-- **Bypassable.** You can always call ``png2svg.core`` directly. These
+- **Bypassable.** You can always call ``hatchsvg.core`` directly. These
   helpers are convenience, not a required API.
 
 Reading order for new users
@@ -31,7 +31,7 @@ Reading order for new users
 4. Read :func:`save_session` / :func:`load_session` — reproducibility
 
 If you only read one function, read :func:`render_svg` — it's the
-smallest summary of what png2svg actually does.
+smallest summary of what hatchsvg actually does.
 """
 
 from __future__ import annotations
@@ -47,15 +47,15 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 from PIL import Image
 
-from png2svg import __version__
-from png2svg.core import (
+from hatchsvg import __version__
+from hatchsvg.core import (
     RenderParams,
     build_color_index_map,
     closest_marker,
     load_marker_palette,
     process_image_to_hatched_svg,
 )
-from png2svg.presets import PRESETS, list_presets
+from hatchsvg.presets import PRESETS, list_presets
 
 # ---------------------------------------------------------------------------
 # Image I/O
@@ -165,12 +165,12 @@ def _find_palette_dir() -> Optional[Path]:
     """Find the directory containing bundled palette JSONs.
 
     Looks in three places, in priority order:
-    1. ``importlib.resources.files("png2svg.data.palettes")`` — the
+    1. ``importlib.resources.files("hatchsvg.data.palettes")`` — the
        canonical location for installed packages (works for both
        regular installs and editable installs that use force-include).
     2. ``<repo-root>/color_palettes/`` — when developing from a git
        clone with no install.
-    3. ``<repo-root>/src/png2svg/data/palettes/`` — the build
+    3. ``<repo-root>/src/hatchsvg/data/palettes/`` — the build
        location used by hatchling's force-include.
 
     Returns the first directory that exists, or None.
@@ -179,7 +179,7 @@ def _find_palette_dir() -> Optional[Path]:
     try:
         from importlib.resources import files
 
-        candidate = files("png2svg.data.palettes")
+        candidate = files("hatchsvg.data.palettes")
         if candidate is not None:
             p = Path(str(candidate))
             if p.is_dir():
@@ -192,7 +192,7 @@ def _find_palette_dir() -> Optional[Path]:
     for d in (
         cwd / "color_palettes",
         cwd.parent / "color_palettes",
-        cwd / "src" / "png2svg" / "data" / "palettes",
+        cwd / "src" / "hatchsvg" / "data" / "palettes",
     ):
         if d.is_dir():
             return d
@@ -309,7 +309,7 @@ def quantize_image(
     ``color_info`` is the human-friendly per-color breakdown.
     """
     # Imported here for clarity; the real work happens in core.build_color_index_map
-    from png2svg.core import rgb_to_hex, rough_color_name
+    from hatchsvg.core import rgb_to_hex, rough_color_name
 
     t0 = time.perf_counter()
     arr = np.asarray(img)
@@ -423,9 +423,9 @@ def match_to_palette(
 ) -> Dict[str, Any]:
     """For each detected color, find the closest marker in the palette.
 
-    This is the magic that makes png2svg a *physical-pen* tool, not a
+    This is the magic that makes hatchsvg a *physical-pen* tool, not a
     generic tracer. We use HSV Euclidean distance by default (see
-    :func:`png2svg.core.closest_marker`); the algorithm does not try
+    :func:`hatchsvg.core.closest_marker`); the algorithm does not try
     to be perceptually correct — it tries to be predictable. A Crafter
     who knows their pens expects "closest red" to actually be the
     closest red, not some Lab-distance-magic that picks a brown.
@@ -505,7 +505,7 @@ def render_svg(
     stroke_width, outline_width, skip_bg, white_medium,
     paper_white_soft, scale, separate_outline, naming_mode,
     continuous_paths, arc_radius
-        Per-stage parameters. See ``png2svg --help`` for defaults.
+        Per-stage parameters. See ``hatchsvg --help`` for defaults.
         The defaults here match the CLI defaults.
 
     Returns
@@ -568,8 +568,8 @@ def render_svg(
     # "Loading image: ..." line, which is part of the executed notebook
     # output.) The file is still in a tmp dir and unlinked after use.
     tmp_dir = Path(tempfile.gettempdir())
-    input_path = tmp_dir / "png2svg_notebook_input.png"
-    output_path = tmp_dir / "png2svg_notebook_output.svg"
+    input_path = tmp_dir / "hatchsvg_notebook_input.png"
+    output_path = tmp_dir / "hatchsvg_notebook_output.svg"
     img.save(input_path, "PNG")
 
     try:

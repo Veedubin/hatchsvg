@@ -1,4 +1,4 @@
-"""Build the three png2svg tutorial notebooks programmatically.
+"""Build the three hatchsvg tutorial notebooks programmatically.
 
 This script generates ``quickstart.ipynb``, ``explore.ipynb``, and
 ``craft.ipynb`` from the in-source definitions below. It exists so the
@@ -70,7 +70,7 @@ def build_quickstart() -> nbf.NotebookNode:
     nb = new_notebook()
     nb.cells = [
         md(
-            "# png2svg — Quickstart",
+            "# hatchsvg — Quickstart",
             "**Goal:** turn a PNG into a plotter-ready SVG in under 5 minutes.",
             "If anything is unclear, see `explore.ipynb` for the detailed walkthrough,",
             "or `craft.ipynb` for advanced usage.",
@@ -78,7 +78,7 @@ def build_quickstart() -> nbf.NotebookNode:
         md(
             "## Step 1 — Install",
             "```bash",
-            "pip install png2svg matplotlib",
+            "pip install hatchsvg matplotlib",
             "```",
             "Then start Jupyter:",
             "```bash",
@@ -155,7 +155,7 @@ def build_quickstart() -> nbf.NotebookNode:
             "## Next steps",
             "- Open `explore.ipynb` to understand what each step does (and why)",
             "- Open `craft.ipynb` for advanced usage: custom marker palettes, batch processing, reproducibility",
-            "- Or use the CLI directly: `png2svg Bluey.png out.svg --preset portrait`",
+            "- Or use the CLI directly: `hatchsvg Bluey.png out.svg --preset portrait`",
         ),
     ]
     _assign_stable_ids(nb, "qs")
@@ -172,7 +172,7 @@ def build_explore() -> nbf.NotebookNode:
     nb = new_notebook()
     nb.cells = [
         md(
-            "# png2svg — Explore",
+            "# hatchsvg — Explore",
             "**Goal:** understand what each step of the pipeline does, and how the parameters interact.",
             "Read the markdown cells — they explain *why*, not just *what*.",
             "When you see a `2a` / `2b` / `2c` heading, those are alternative paths; pick the one that matches your use case.",
@@ -214,7 +214,7 @@ def build_explore() -> nbf.NotebookNode:
         ),
         md(
             "### Stage 2a — Quantize with a physical marker palette",
-            "This is the path that makes png2svg a *physical-pen* tool, not a generic tracer.",
+            "This is the path that makes hatchsvg a *physical-pen* tool, not a generic tracer.",
             "We map each detected color to the **closest marker you actually own**.",
             "",
             "Bundled palettes: `crayola_10ct_fine_line_classic`, `jot_20ct_washable_fineline`.",
@@ -314,7 +314,7 @@ def build_explore() -> nbf.NotebookNode:
             "print(f'SVG: {svg_out.absolute()} ({svg_out.stat().st_size:,} bytes)')\n"
             "\n"
             "# Save the session (params + palette + color map) for reproducibility\n"
-            "from png2svg.core import RenderParams\n"
+            "from hatchsvg.core import RenderParams\n"
             "session = nh.snapshot_session(\n"
             "    params=RenderParams(**result['params']),\n"
             "    palette=palette,\n"
@@ -348,7 +348,7 @@ def build_craft() -> nbf.NotebookNode:
     nb = new_notebook()
     nb.cells = [
         md(
-            "# png2svg — Craft",
+            "# hatchsvg — Craft",
             "**Goal:** fine-grained control. Custom marker palettes, per-color remap, batch processing, comparison with adjacent tools.",
             "If you haven't read `quickstart.ipynb` and `explore.ipynb`, do that first — this notebook assumes you understand the 4 stages.",
         ),
@@ -480,7 +480,7 @@ def build_craft() -> nbf.NotebookNode:
         ),
         code(
             "from pathlib import Path\n"
-            "from png2svg.core import RenderParams\n"
+            "from hatchsvg.core import RenderParams\n"
             "import notebook_helpers as nh\n"
             "import json\n"
             "\n"
@@ -502,7 +502,7 @@ def build_craft() -> nbf.NotebookNode:
             "print(f'  image: {reloaded[\"image\"]}')\n"
             'print(f\'  params: max_palette={reloaded["params"]["max_palette"]}, line_step={reloaded["params"]["line_step"]}\')\n'
             'print(f\'  palette: {reloaded["palette"]["brand"]} ({len(reloaded["palette"]["colors"])} colors)\')\n'
-            "print(f'  version: png2svg {reloaded[\"version\"]}')",
+            "print(f'  version: hatchsvg {reloaded[\"version\"]}')",
         ),
         md(
             "## 5. Batch processing",
@@ -604,13 +604,13 @@ def build_craft() -> nbf.NotebookNode:
             "",
             "| Tool | Use when | Skip when |",
             "|------|----------|-----------|",
-            "| **png2svg** | You want hatched SVG with **physical marker awareness** and a Cricut-friendly output | You want a smooth photo trace (use vtracer); you want grayscale halftone (use hatched) |",
+            "| **hatchsvg** | You want hatched SVG with **physical marker awareness** and a Cricut-friendly output | You want a smooth photo trace (use vtracer); you want grayscale halftone (use hatched) |",
             "| **vtracer** (MIT) | You want a smooth multi-color trace of a photo, output goes to vpype for optimization | You want hatched fills (vtracer doesn't hatch) |",
             "| **vpype + hatched** (MIT) | You already have an SVG and want to add hatching; or you want grayscale halftone | You want color, physical-marker awareness, or a Cricut-ready output |",
             "| **plottter** (MIT) | You want a full desktop app with AI masks, dithering, and many generator styles | You want a simple CLI + notebook workflow with no AI dependencies |",
             "| **saxi** (AGPL) | You have an AxiDraw and want a driver for it (note: AGPL license) | You want raster-to-vector (out of scope) |",
             "",
-            "**Common workflow:** png2svg → Inkscape (manual tweaks) → vpype (plot optimization) → Cricut Design Space or your plotter's driver.",
+            "**Common workflow:** hatchsvg → Inkscape (manual tweaks) → vpype (plot optimization) → Cricut Design Space or your plotter's driver.",
         ),
         md(
             "## 8. Troubleshooting",
@@ -639,9 +639,9 @@ def build_craft() -> nbf.NotebookNode:
         ),
         md(
             "## Where to go from here",
-            "- Read the source: `src/png2svg/core.py` (the algorithm)",
-            "- Read `src/png2svg/presets.py` (preset definitions)",
-            "- Read `src/png2svg/cli.py` (the CLI — the notebook helpers wrap the same functions)",
+            "- Read the source: `src/hatchsvg/core.py` (the algorithm)",
+            "- Read `src/hatchsvg/presets.py` (preset definitions)",
+            "- Read `src/hatchsvg/cli.py` (the CLI — the notebook helpers wrap the same functions)",
             "- File an issue: https://github.com/Veedubin/hatchsvg/issues",
         ),
     ]
@@ -655,7 +655,7 @@ def build_craft() -> nbf.NotebookNode:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build the png2svg tutorial notebooks")
+    parser = argparse.ArgumentParser(description="Build the hatchsvg tutorial notebooks")
     parser.add_argument(
         "--out-dir",
         default=".",

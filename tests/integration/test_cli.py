@@ -5,16 +5,16 @@ from pathlib import Path
 
 import pytest
 
-import png2svg
+import hatchsvg
 
 # Project root (parent of tests/)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-VENV_PNG2SVG = PROJECT_ROOT / ".venv" / "bin" / "png2svg"
+VENV_HATCHSVG = PROJECT_ROOT / ".venv" / "bin" / "hatchsvg"
 
-# Skip these tests if png2svg isn't installed in the venv (CI uses pip install -e .[dev])
+# Skip these tests if hatchsvg isn't installed in the venv (CI uses pip install -e .[dev])
 pytestmark = pytest.mark.skipif(
-    not VENV_PNG2SVG.exists(),
-    reason=f"png2svg not installed at {VENV_PNG2SVG}",
+    not VENV_HATCHSVG.exists(),
+    reason=f"hatchsvg not installed at {VENV_HATCHSVG}",
 )
 
 
@@ -36,21 +36,21 @@ def small_test_png(tmp_path_factory):
 
 
 def test_cli_version():
-    """`png2svg --version` exits 0 and prints the version string."""
+    """`hatchsvg --version` exits 0 and prints the version string."""
     result = subprocess.run(
-        [str(VENV_PNG2SVG), "--version"],
+        [str(VENV_HATCHSVG), "--version"],
         capture_output=True,
         text=True,
         check=False,
     )
     assert result.returncode == 0
-    assert f"png2svg {png2svg.__version__}" in result.stdout
+    assert f"hatchsvg {hatchsvg.__version__}" in result.stdout
 
 
 def test_cli_help_lists_presets():
-    """`png2svg --help` mentions the --preset choices."""
+    """`hatchsvg --help` mentions the --preset choices."""
     result = subprocess.run(
-        [str(VENV_PNG2SVG), "--help"],
+        [str(VENV_HATCHSVG), "--help"],
         capture_output=True,
         text=True,
         check=False,
@@ -62,10 +62,10 @@ def test_cli_help_lists_presets():
 
 
 def test_cli_runs_with_preset_fast(small_test_png, tmp_path):
-    """`png2svg in.png out.svg --preset fast` produces a valid SVG."""
+    """`hatchsvg in.png out.svg --preset fast` produces a valid SVG."""
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
-        [str(VENV_PNG2SVG), str(small_test_png), str(out_svg), "--preset", "fast"],
+        [str(VENV_HATCHSVG), str(small_test_png), str(out_svg), "--preset", "fast"],
         capture_output=True,
         text=True,
         check=False,
@@ -78,10 +78,10 @@ def test_cli_runs_with_preset_fast(small_test_png, tmp_path):
 
 
 def test_cli_runs_with_preset_line_art(small_test_png, tmp_path):
-    """`png2svg --preset line-art` works on a small PNG."""
+    """`hatchsvg --preset line-art` works on a small PNG."""
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
-        [str(VENV_PNG2SVG), str(small_test_png), str(out_svg), "--preset", "line-art"],
+        [str(VENV_HATCHSVG), str(small_test_png), str(out_svg), "--preset", "line-art"],
         capture_output=True,
         text=True,
         check=False,
@@ -91,11 +91,11 @@ def test_cli_runs_with_preset_line_art(small_test_png, tmp_path):
 
 
 def test_cli_explicit_flag_overrides_preset(small_test_png, tmp_path):
-    """`png2svg --preset logo --line-step 2` should succeed (line_step is an override)."""
+    """`hatchsvg --preset logo --line-step 2` should succeed (line_step is an override)."""
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(small_test_png),
             str(out_svg),
             "--preset",
@@ -111,12 +111,12 @@ def test_cli_explicit_flag_overrides_preset(small_test_png, tmp_path):
 
 
 def test_cli_rejects_unsupported_format(tmp_path):
-    """`png2svg foo.exe out.svg` exits 1 with a friendly error."""
+    """`hatchsvg foo.exe out.svg` exits 1 with a friendly error."""
     fake = tmp_path / "test.exe"
     fake.write_bytes(b"MZ")
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
-        [str(VENV_PNG2SVG), str(fake), str(out_svg)],
+        [str(VENV_HATCHSVG), str(fake), str(out_svg)],
         capture_output=True,
         text=True,
         check=False,
@@ -126,11 +126,11 @@ def test_cli_rejects_unsupported_format(tmp_path):
 
 
 def test_cli_rejects_unknown_preset(small_test_png, tmp_path):
-    """`png2svg --preset bogus` exits 2 (argparse error) before reaching core."""
+    """`hatchsvg --preset bogus` exits 2 (argparse error) before reaching core."""
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(small_test_png),
             str(out_svg),
             "--preset",
@@ -146,7 +146,7 @@ def test_cli_rejects_unknown_preset(small_test_png, tmp_path):
 
 
 def test_cli_accepts_jpg_input(tmp_path):
-    """`png2svg in.jpg out.svg --preset fast` works (multi-format input).
+    """`hatchsvg in.jpg out.svg --preset fast` works (multi-format input).
 
     Uses a 64x64 image so default ``min_pixels=200`` finds enough pixels per
     color after quantization.
@@ -163,7 +163,7 @@ def test_cli_accepts_jpg_input(tmp_path):
     out_svg = tmp_path / "out.svg"
 
     result = subprocess.run(
-        [str(VENV_PNG2SVG), str(in_jpg), str(out_svg), "--preset", "fast"],
+        [str(VENV_HATCHSVG), str(in_jpg), str(out_svg), "--preset", "fast"],
         capture_output=True,
         text=True,
         check=False,
@@ -173,18 +173,18 @@ def test_cli_accepts_jpg_input(tmp_path):
 
 
 def test_cli_save_session_roundtrip(small_test_png, tmp_path):
-    """`png2svg --save-session` writes a session JSON, --use-session reproduces it."""
+    """`hatchsvg --save-session` writes a session JSON, --use-session reproduces it."""
     import json
 
     out_svg = tmp_path / "first.svg"
     # The CLI names the session file "<output>.session.json" (e.g.
-    # "first.svg.session.json"). See src/png2svg/cli.py:242.
+    # "first.svg.session.json"). See src/hatchsvg/cli.py:242.
     session_path = tmp_path / "first.svg.session.json"
 
     # First run: render + save session
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(small_test_png),
             str(out_svg),
             "--preset",
@@ -207,7 +207,7 @@ def test_cli_save_session_roundtrip(small_test_png, tmp_path):
     out_svg2 = tmp_path / "second.svg"
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(small_test_png),
             str(out_svg2),
             "--use-session",
@@ -222,11 +222,11 @@ def test_cli_save_session_roundtrip(small_test_png, tmp_path):
 
 
 def test_cli_missing_input_file(tmp_path):
-    """`png2svg /nonexistent.png out.svg` exits 1 with a friendly error."""
+    """`hatchsvg /nonexistent.png out.svg` exits 1 with a friendly error."""
     fake = tmp_path / "does_not_exist.png"
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
-        [str(VENV_PNG2SVG), str(fake), str(out_svg)],
+        [str(VENV_HATCHSVG), str(fake), str(out_svg)],
         capture_output=True,
         text=True,
         check=False,
@@ -238,11 +238,11 @@ def test_cli_missing_input_file(tmp_path):
 
 
 def test_cli_stats_flag_runs(small_test_png, tmp_path):
-    """`png2svg --stats` runs successfully and prints stats to stderr."""
+    """`hatchsvg --stats` runs successfully and prints stats to stderr."""
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(small_test_png),
             str(out_svg),
             "--preset",
@@ -258,9 +258,9 @@ def test_cli_stats_flag_runs(small_test_png, tmp_path):
 
 
 def test_cli_help_shows_examples():
-    """`png2svg --help` shows the Examples: section."""
+    """`hatchsvg --help` shows the Examples: section."""
     result = subprocess.run(
-        [str(VENV_PNG2SVG), "--help"],
+        [str(VENV_HATCHSVG), "--help"],
         capture_output=True,
         text=True,
         check=False,
@@ -270,11 +270,11 @@ def test_cli_help_shows_examples():
 
 
 def test_cli_preview_flag_parsed(small_test_png, tmp_path):
-    """`png2svg --preview` parses and exits 0 (browser open is best-effort)."""
+    """`hatchsvg --preview` parses and exits 0 (browser open is best-effort)."""
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(small_test_png),
             str(out_svg),
             "--preset",
@@ -291,11 +291,11 @@ def test_cli_preview_flag_parsed(small_test_png, tmp_path):
 
 
 def test_cli_split_layers_creates_one_file_per_layer(small_test_png, tmp_path):
-    """`png2svg --split-layers` creates N+1 files (main + N layer files)."""
+    """`hatchsvg --split-layers` creates N+1 files (main + N layer files)."""
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(small_test_png),
             str(out_svg),
             "--preset",
@@ -320,7 +320,7 @@ def test_cli_split_layers_creates_one_file_per_layer(small_test_png, tmp_path):
 
 
 def test_cli_optimize_travel_runs(tmp_path):
-    """`png2svg --optimize-travel` on Bluey.png exits 0 and produces valid SVG."""
+    """`hatchsvg --optimize-travel` on Bluey.png exits 0 and produces valid SVG."""
     project_root = Path(__file__).parent.parent.parent
     bluey_png = project_root / "Bluey.png"
     if not bluey_png.exists():
@@ -329,7 +329,7 @@ def test_cli_optimize_travel_runs(tmp_path):
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(bluey_png),
             str(out_svg),
             "--preset",
@@ -349,11 +349,11 @@ def test_cli_optimize_travel_runs(tmp_path):
 
 
 def test_cli_hatch_angles_parses_csv(small_test_png, tmp_path):
-    """`png2svg --hatch-angles=0,45,90` parses and runs successfully."""
+    """`hatchsvg --hatch-angles=0,45,90` parses and runs successfully."""
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(small_test_png),
             str(out_svg),
             "--preset",
@@ -369,11 +369,11 @@ def test_cli_hatch_angles_parses_csv(small_test_png, tmp_path):
 
 
 def test_cli_hatch_angles_invalid_value_errors(small_test_png, tmp_path):
-    """`png2svg --hatch-angles=foo` exits non-zero with a friendly error."""
+    """`hatchsvg --hatch-angles=foo` exits non-zero with a friendly error."""
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
         [
-            str(VENV_PNG2SVG),
+            str(VENV_HATCHSVG),
             str(small_test_png),
             str(out_svg),
             "--hatch-angles=foo",

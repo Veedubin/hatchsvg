@@ -1,6 +1,6 @@
 """Tests for color utility functions."""
 
-from png2svg.core import luminance, rgb_to_hex, rgb_to_hsv_deg, rough_color_name
+from hatchsvg.core import luminance, rgb_to_hex, rgb_to_hsv_deg, rough_color_name
 
 
 def test_luminance_black():

@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "png2svg"
+name = "hatchsvg"
 dynamic = ["version"]
-description = "Convert PNG images to hatched SVG files for Cricut pen plotters"
+description = "Convert images to hatched SVG files for Cricut pen plotters"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
 authors = [
-    {name = "png2svg contributors", email = "contributors@png2svg.dev"}
+    {name = "hatchsvg contributors", email = "contributors@hatchsvg.dev"}
 ]
-keywords = ["cricut", "pen-plotter", "svg", "hatching", "png-to-svg"]
+keywords = ["cricut", "pen-plotter", "svg", "hatching", "hatch"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: End Users/Desktop",
@@ -34,7 +34,7 @@ dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.1"]
 notebook = ["jupyter>=1.1", "ipykernel>=6.0", "matplotlib>=3.5", "nbformat>=5.10"]
 
 [project.scripts]
-png2svg = "png2svg.cli:main"
+hatchsvg = "hatchsvg.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Veedubin/hatchsvg"
@@ -42,26 +42,25 @@ Repository = "https://github.com/Veedubin/hatchsvg.git"
 Issues = "https://github.com/Veedubin/hatchsvg/issues"
 
 [tool.hatch.version]
-path = "src/png2svg/__init__.py"
+path = "src/hatchsvg/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/png2svg"]
+packages = ["src/hatchsvg"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"color_palettes" = "png2svg/data/palettes"
+"color_palettes" = "hatchsvg/data/palettes"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-# Insert `src/` at the front of sys.path so the installed `png2svg` package
-# (under src/png2svg/) wins over any legacy `png2svg.py` script in the repo
-# root. The script is kept as a reference but does not shadow the package.
+# Insert `src/` at the front of sys.path so the installed `hatchsvg` package
+# (under src/hatchsvg/) is importable during testing.
 pythonpath = ["src"]
 # Make the notebook helpers importable for the smoke tests
-addopts = "-v --tb=short --cov=png2svg --cov-report=term-missing"
+addopts = "-v --tb=short --cov=hatchsvg --cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["src/png2svg"]
+source = ["src/hatchsvg"]
 omit = ["*/tests/*"]
 
 [tool.ruff]
@@ -74,10 +73,12 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 # The legacy script is a verbatim extract of the original 1328-line
-# png2svg.py and is preserved for reference. It has pre-existing
-# style violations and one real bug (undefined 'visible' on line 930);
-# we deliberately don't fix it here — the cleaned-up algorithm lives
-# in src/png2svg/core.py.
+# png2svg.py from v1.0.0 and is preserved for historical reference. It
+# has pre-existing style violations and one real bug (undefined
+# 'visible' on line 930); we deliberately don't fix it here — the
+# cleaned-up algorithm lives in src/hatchsvg/core.py. The script's
+# FILENAME is kept as png2svg_legacy.py so the historical reference
+# is unambiguous.
 "scripts/png2svg_legacy.py" = ["N806", "F821", "E", "F", "W", "I001"]
 
 # Jupyter notebooks are cell-based; the rules that assume linear

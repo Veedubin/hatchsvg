@@ -1,4 +1,4 @@
-# png2svg
+# hatchsvg
 
 > **Turn raster images into pen-plotted hatched SVGs.**
 > Optimized for Cricut, Axidraw, and any pen plotter that reads SVG.
@@ -6,20 +6,17 @@
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](https://github.com/Veedubin/hatchsvg/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI](https://img.shields.io/pypi/v/png2svg.svg)](https://pypi.org/project/png2svg/)
+[![PyPI](https://img.shields.io/pypi/v/hatchsvg.svg)](https://pypi.org/project/hatchsvg/)
 
-## What's new in 1.2.0
+## What's new in 2.0.0
 
-- **`--preview`** — open the output SVG in your default viewer after rendering
-- **`--split-layers`** — write one SVG file per color layer (great for drying time between pen passes)
-- **`--optimize-travel`** — reorder layers to minimize pen travel distance (saves plot time)
-- **`--hatch-angles`** — different hatch angles per color layer (reduces visual moiré)
-- **`--help` with examples** — see common invocations without leaving the terminal
+- **Package renamed to `hatchsvg`** (was `png2svg`). Matches the repo name. See the [migration guide in CHANGELOG.md](CHANGELOG.md#200---2026-06-17) — `pip install hatchsvg`, `import hatchsvg`, `hatchsvg photo.jpg out.svg`.
+- All v1.2.0 features still ship: `--preview`, `--split-layers`, `--optimize-travel`, `--hatch-angles`, plus 5 inline examples in `--help`.
 - **Pure Python** — no C compiler required. Works on every platform pip supports.
 
 ## What it does
 
-`png2svg` converts raster images (PNG, JPG, WebP, BMP, GIF, TIFF) into
+`hatchsvg` converts raster images (PNG, JPG, WebP, BMP, GIF, TIFF) into
 hatched SVG vector files. Each color in the image becomes a separate SVG
 layer, and each layer is filled with parallel hatch lines sized to match a
 physical marker set. The output is optimized for **Cricut pen plotters** and
@@ -30,8 +27,8 @@ lifts and ringing artifacts.
 ## Quickstart
 
 ```bash
-pip install png2svg
-png2svg photo.jpg drawing.svg --preset portrait
+pip install hatchsvg
+hatchsvg photo.jpg drawing.svg --preset portrait
 ```
 
 That's it. Open `drawing.svg` in Inkscape, Cricut Design Space, or any
@@ -40,12 +37,12 @@ is selectable individually.
 
 > **No SVG file? Try it on the included sample:**
 > ```bash
-> png2svg examples/scene.png /tmp/scene.svg --preset fast
+> hatchsvg examples/scene.png /tmp/scene.svg --preset fast
 > ```
 
-## Why use png2svg?
+## Why use hatchsvg?
 
-| Problem with naive "image → SVG" converters | How png2svg solves it |
+| Problem with naive "image → SVG" converters | How hatchsvg solves it |
 |---|---|
 | Tracer output is dense, jittery, and pen plotter hates it. | Uses **scanline hatching** at a configurable line step — predictable pen motion. |
 | Pen lifts between every line segment cause visible artifacts on Cricut. | **Serpentine continuous paths** chain rows together (zigzag motion). |
@@ -57,13 +54,13 @@ is selectable individually.
 
 | Tool | Input | Output | Pen-plotter aware | Marker palettes |
 |------|-------|--------|-------------------|-----------------|
-| **png2svg** | Raster | Hatched SVG (per-color layers) | **Yes** — serpentine + arc smoothing + chain components | **Yes** — Crayola, Jot, custom JSON |
+| **hatchsvg** | Raster | Hatched SVG (per-color layers) | **Yes** — serpentine + arc smoothing + chain components | **Yes** — Crayola, Jot, custom JSON |
 | `potrace` | Bitmap | Smooth traced paths | No — fills entire region | No |
 | `vtracer` | Bitmap | Smooth traced paths | Partial | No |
 | `inkscape --trace-bitmap` | Bitmap | Smooth traced paths | No | No |
 | `stipplegen`, `penkit`, etc. | Raster | Various pen-plotter art | Yes (each is its own niche) | No |
 
-`png2svg` is the right choice when you want **stylized, low-pen-lift,
+`hatchsvg` is the right choice when you want **stylized, low-pen-lift,
 marker-accurate** output rather than a photo-faithful trace.
 
 ## Presets
@@ -82,33 +79,33 @@ on top of the preset.
 | `fast` | Quick preview. Few colors, wide hatch, no optimization. Renders in seconds. |
 
 ```bash
-png2svg drawing.png out.svg --preset portrait
-png2svg drawing.png out.svg --preset logo --max-palette 4  # override one flag
+hatchsvg drawing.png out.svg --preset portrait
+hatchsvg drawing.png out.svg --preset logo --max-palette 4  # override one flag
 ```
 
-See `png2svg --help` for full preset descriptions.
+See `hatchsvg --help` for full preset descriptions.
 
 ## Installation
 
 ```bash
-pip install png2svg
+pip install hatchsvg
 ```
 
-> **Pure Python**: png2svg has zero C extensions. No compiler needed,
+> **Pure Python**: hatchsvg has zero C extensions. No compiler needed,
 > no `potracer`/`pypotrace` build failures. Works on Windows, macOS,
 > Linux, ARM, anywhere Python 3.11+ runs.
 
 Optional extras:
 
 ```bash
-pip install png2svg[plot]    # progress bars (rich) + scipy for component chaining
+pip install hatchsvg[plot]    # progress bars (rich) + scipy for component chaining
 ```
 
 For development:
 
 ```bash
 git clone https://github.com/Veedubin/hatchsvg
-cd png2svg
+cd hatchsvg
 python -m venv .venv
 .venv/bin/pip install -e ".[dev,plot]"
 ```
@@ -116,7 +113,7 @@ python -m venv .venv
 ## CLI Reference
 
 ```
-png2svg [OPTIONS] INPUT OUTPUT_SVG
+hatchsvg [OPTIONS] INPUT OUTPUT_SVG
 ```
 
 | Flag | Default | Description |
@@ -143,7 +140,7 @@ png2svg [OPTIONS] INPUT OUTPUT_SVG
 | `--split-layers` | (off) | Write one SVG file per color layer. |
 | `--optimize-travel` | (off) | Reorder layers to minimize pen travel distance. |
 | `--hatch-angles ANGLES` | (none) | Comma-separated hatch angles per layer (degrees). |
-| `--progress` | (off) | Show Rich progress bars (requires `pip install png2svg[plot]`). |
+| `--progress` | (off) | Show Rich progress bars (requires `pip install hatchsvg[plot]`). |
 | `--stats` | (off) | Show processing statistics on completion. |
 | `--version` | | Print the version and exit. |
 
@@ -152,7 +149,7 @@ png2svg [OPTIONS] INPUT OUTPUT_SVG
 ### Basic conversion
 
 ```bash
-png2svg photo.jpg drawing.svg
+hatchsvg photo.jpg drawing.svg
 ```
 
 ### Recommended for Cricut pen plotters
@@ -160,7 +157,7 @@ png2svg photo.jpg drawing.svg
 The two flags that matter most:
 
 ```bash
-png2svg photo.jpg drawing.svg --continuous-paths --arc-radius 5
+hatchsvg photo.jpg drawing.svg --continuous-paths --arc-radius 5
 ```
 
 - `--continuous-paths` chains rows into a single zigzag, eliminating the
@@ -171,7 +168,7 @@ png2svg photo.jpg drawing.svg --continuous-paths --arc-radius 5
 ### Use a bundled marker palette
 
 ```bash
-png2svg photo.jpg drawing.svg --palette-file color_palettes/crayola_10ct_fine_line_classic.json
+hatchsvg photo.jpg drawing.svg --palette-file color_palettes/crayola_10ct_fine_line_classic.json
 ```
 
 Bundled palettes: `crayola_10ct_fine_line_classic.json` and
@@ -181,25 +178,25 @@ Bundled palettes: `crayola_10ct_fine_line_classic.json` and
 
 ```bash
 # First run: save the exact config used
-png2svg photo.jpg drawing.svg --preset portrait --save-session
+hatchsvg photo.jpg drawing.svg --preset portrait --save-session
 
 # Later: replay the exact same config
-png2svg photo.jpg drawing2.svg --use-session drawing.svg.session.json
+hatchsvg photo.jpg drawing2.svg --use-session drawing.svg.session.json
 ```
 
 ### Multi-format input
 
 ```bash
-png2svg scan.webp out.svg        # WebP
-png2svg photo.bmp out.svg        # BMP
-png2svg photo.tiff out.svg       # TIFF
-png2svg anim.gif out.svg         # GIF (uses first frame)
+hatchsvg scan.webp out.svg        # WebP
+hatchsvg photo.bmp out.svg        # BMP
+hatchsvg photo.tiff out.svg       # TIFF
+hatchsvg anim.gif out.svg         # GIF (uses first frame)
 ```
 
 ### Show processing stats
 
 ```bash
-png2svg photo.jpg out.svg --progress --stats
+hatchsvg photo.jpg out.svg --progress --stats
 ```
 
 Outputs a Rich table with image dimensions, color count, layer count,
@@ -208,11 +205,11 @@ pen-lift reduction percentage, and estimated plot time savings.
 ## Project Structure
 
 ```
-png2svg/
+hatchsvg/
 ├── src/
-│   └── png2svg/
+│   └── hatchsvg/
 │       ├── __init__.py        # __version__
-│       ├── __main__.py        # python -m png2svg
+│       ├── __main__.py        # python -m hatchsvg
 │       ├── core.py            # Algorithm (hatching, color matching, SVG emission)
 │       ├── cli.py             # CLI + friendly error handling
 │       └── presets.py         # Named presets (portrait, logo, line-art, photo, sketch, fast)
@@ -272,6 +269,6 @@ MIT — see [LICENSE](LICENSE).
 
 ## Credits
 
-Algorithm extracted from the original `png2svg.py` script. Bundled marker
+Algorithm extracted from the original `hatchsvg.py` script. Bundled marker
 palettes (Crayola, Jot) are trademarks of their respective owners and are
 included only as practical examples.

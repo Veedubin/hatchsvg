@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for png2svg tests."""
+"""Shared pytest fixtures for hatchsvg tests."""
 
 import sys
 from pathlib import Path
@@ -20,7 +20,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 @pytest.fixture
 def crayola_palette():
     """Load the bundled Crayola 10ct Fine Line Classic palette."""
-    from png2svg.core import load_marker_palette
+    from hatchsvg.core import load_marker_palette
 
     palette_path = PALETTES_DIR / "crayola_10ct_fine_line_classic.json"
     return load_marker_palette(palette_path)
@@ -29,7 +29,7 @@ def crayola_palette():
 @pytest.fixture
 def jot_palette():
     """Load the bundled Jot 20ct Washable Fineline palette."""
-    from png2svg.core import load_marker_palette
+    from hatchsvg.core import load_marker_palette
 
     palette_path = PALETTES_DIR / "jot_20ct_washable_fineline.json"
     return load_marker_palette(palette_path)

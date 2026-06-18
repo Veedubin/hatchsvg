@@ -8,7 +8,7 @@ common failures cheaply: import errors, signature mismatches,
 return-type regressions.
 
 Why are these in ``tests/integration/`` and not ``tests/unit/``?
-Because the helpers depend on the installed ``png2svg`` package
+Because the helpers depend on the installed ``hatchsvg`` package
 (installed via ``pip install -e .``) and on bundled palette
 JSONs. They're integration tests by nature.
 """
@@ -132,7 +132,7 @@ def test_render_quantized_preview_returns_image():
 def test_snapshot_session_roundtrip():
     """snapshot_session + save/load gives back an equivalent dict."""
 
-    from png2svg.core import RenderParams
+    from hatchsvg.core import RenderParams
 
     img = nh.load_image(BLUEY)
     quant = nh.quantize_image(img, max_palette=6)

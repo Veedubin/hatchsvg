@@ -3,7 +3,7 @@
 import pytest
 from PIL import Image
 
-from png2svg.cli import SUPPORTED_INPUT_FORMATS
+from hatchsvg.cli import SUPPORTED_INPUT_FORMATS
 
 
 def test_supported_formats_includes_png():

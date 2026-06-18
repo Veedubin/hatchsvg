@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from png2svg.core import RenderParams, render_single_layer_svg
+from hatchsvg.core import RenderParams, render_single_layer_svg
 
 
 @pytest.fixture

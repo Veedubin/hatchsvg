@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from png2svg.core import hatch_path_for_mask
+from hatchsvg.core import hatch_path_for_mask
 
 
 def _make_rectangle_mask():

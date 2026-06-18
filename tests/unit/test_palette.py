@@ -2,7 +2,7 @@
 
 import pytest
 
-from png2svg.core import load_marker_palette
+from hatchsvg.core import load_marker_palette
 
 
 def test_load_marker_palette_crayola(crayola_palette):

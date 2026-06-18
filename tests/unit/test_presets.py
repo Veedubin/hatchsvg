@@ -2,7 +2,7 @@
 
 import pytest
 
-from png2svg.presets import PRESETS, apply_preset, get_preset, list_presets
+from hatchsvg.presets import PRESETS, apply_preset, get_preset, list_presets
 
 
 def test_all_six_presets_present():
@@ -28,7 +28,7 @@ def test_each_preset_has_at_least_two_overrides():
 
 def test_preset_field_names_match_render_params():
     """Every override key must be a valid RenderParams field."""
-    from png2svg.core import RenderParams
+    from hatchsvg.core import RenderParams
 
     valid_fields = {f for f in RenderParams.__dataclass_fields__}
     for name, spec in PRESETS.items():

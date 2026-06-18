@@ -1,6 +1,6 @@
 """Named parameter presets for common use cases.
 
-Presets are partial overrides for :class:`png2svg.core.RenderParams` — they
+Presets are partial overrides for :class:`hatchsvg.core.RenderParams` — they
 provide sensible defaults that the user can still refine with individual CLI
 flags. Apply a preset via ``--preset portrait`` etc.
 

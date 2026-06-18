@@ -1,6 +1,6 @@
 """Tests for optimize_layer_order (used by --optimize-travel)."""
 
-from png2svg.core import optimize_layer_order
+from hatchsvg.core import optimize_layer_order
 
 
 def test_optimize_layer_order_single_layer():

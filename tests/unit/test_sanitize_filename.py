@@ -1,6 +1,6 @@
 """Tests for _sanitize_filename (used by --split-layers for file naming)."""
 
-from png2svg.cli import _sanitize_filename
+from hatchsvg.cli import _sanitize_filename
 
 
 def test_sanitize_lowercases():

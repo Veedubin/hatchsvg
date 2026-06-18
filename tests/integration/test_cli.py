@@ -320,17 +320,17 @@ def test_cli_split_layers_creates_one_file_per_layer(small_test_png, tmp_path):
 
 
 def test_cli_optimize_travel_runs(tmp_path):
-    """`hatchsvg --optimize-travel` on Bluey.png exits 0 and produces valid SVG."""
+    """`hatchsvg --optimize-travel` on the test image exits 0 and produces valid SVG."""
     project_root = Path(__file__).parent.parent.parent
-    bluey_png = project_root / "Bluey.png"
-    if not bluey_png.exists():
-        pytest.skip("Bluey.png not found in project root")
+    test_png = project_root / "tests" / "fixtures" / "test_image.png"
+    if not test_png.exists():
+        pytest.skip("test_image.png not found in tests/fixtures/")
 
     out_svg = tmp_path / "out.svg"
     result = subprocess.run(
         [
             str(VENV_HATCHSVG),
-            str(bluey_png),
+            str(test_png),
             str(out_svg),
             "--preset",
             "fast",

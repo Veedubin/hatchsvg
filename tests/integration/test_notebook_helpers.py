@@ -27,8 +27,8 @@ if str(NOTEBOOKS_DIR) not in sys.path:
 
 import notebook_helpers as nh  # noqa: E402
 
-# Use the sample Bluey image that ships with the repo
-BLUEY = Path(__file__).parent.parent.parent / "Bluey.png"
+# Use the synthetic test image that ships with the repo
+TEST_IMAGE = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "test_image.png"
 
 
 def test_helpers_module_imports():
@@ -67,18 +67,18 @@ def test_load_palette_unknown_raises():
         nh.load_palette("nonexistent-palette")
 
 
-@pytest.mark.skipif(not BLUEY.exists(), reason="Bluey.png not in repo root")
+@pytest.mark.skipif(not TEST_IMAGE.exists(), reason="test_image.png not in repo root")
 def test_load_image_returns_rgba():
     """Image loader forces RGBA mode."""
-    img = nh.load_image(BLUEY)
+    img = nh.load_image(TEST_IMAGE)
     assert img.mode == "RGBA"
     assert img.size[0] > 0 and img.size[1] > 0
 
 
-@pytest.mark.skipif(not BLUEY.exists(), reason="Bluey.png not in repo root")
+@pytest.mark.skipif(not TEST_IMAGE.exists(), reason="test_image.png not in repo root")
 def test_quantize_image_runs_and_returns_expected_shape():
     """Quantize returns the documented dict shape."""
-    img = nh.load_image(BLUEY)
+    img = nh.load_image(TEST_IMAGE)
     quant = nh.quantize_image(img, max_palette=6)
 
     # Required keys
@@ -102,10 +102,10 @@ def test_quantize_image_runs_and_returns_expected_shape():
     assert quant["elapsed_ms"] < 30000  # quantize should be fast
 
 
-@pytest.mark.skipif(not BLUEY.exists(), reason="Bluey.png not in repo root")
+@pytest.mark.skipif(not TEST_IMAGE.exists(), reason="test_image.png not in repo root")
 def test_match_to_palette_adds_marker_fields():
     """match_to_palette enriches each color with marker_name / marker_hex."""
-    img = nh.load_image(BLUEY)
+    img = nh.load_image(TEST_IMAGE)
     quant = nh.quantize_image(img, max_palette=6)
     palette = nh.load_palette("crayola_10ct_fine_line_classic")
     matched = nh.match_to_palette(quant, palette)
@@ -116,25 +116,25 @@ def test_match_to_palette_adds_marker_fields():
         assert "marker_rgb" in c
 
 
-@pytest.mark.skipif(not BLUEY.exists(), reason="Bluey.png not in repo root")
+@pytest.mark.skipif(not TEST_IMAGE.exists(), reason="test_image.png not in repo root")
 def test_render_quantized_preview_returns_image():
     """The preview helper returns a PIL Image sized like the original."""
     from PIL import Image
 
-    img = nh.load_image(BLUEY)
+    img = nh.load_image(TEST_IMAGE)
     quant = nh.quantize_image(img, max_palette=6)
     preview = nh.render_quantized_preview(img, quant)
     assert isinstance(preview, Image.Image)
     assert preview.size == img.size
 
 
-@pytest.mark.skipif(not BLUEY.exists(), reason="Bluey.png not in repo root")
+@pytest.mark.skipif(not TEST_IMAGE.exists(), reason="test_image.png not in repo root")
 def test_snapshot_session_roundtrip():
     """snapshot_session + save/load gives back an equivalent dict."""
 
     from hatchsvg.core import RenderParams
 
-    img = nh.load_image(BLUEY)
+    img = nh.load_image(TEST_IMAGE)
     quant = nh.quantize_image(img, max_palette=6)
     palette = nh.load_palette("crayola_10ct_fine_line_classic")
 
@@ -145,7 +145,7 @@ def test_snapshot_session_roundtrip():
         params=RenderParams(max_palette=6),
         palette=palette,
         color_map=color_map,
-        image_path=str(BLUEY),
+        image_path=str(TEST_IMAGE),
     )
     assert "version" in session
     assert "image" in session

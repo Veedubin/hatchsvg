@@ -8,7 +8,7 @@ from hatchsvg.core import RenderParams, load_session, save_session
 def test_save_and_load_session_roundtrip(tmp_path):
     # Create a session
     out_path = tmp_path / "session.json"
-    input_path = Path("Bluey.png")
+    input_path = Path("test_image.png")
     palette_file = "color_palettes/crayola_10ct_fine_line_classic.json"
 
     params = RenderParams(
@@ -35,7 +35,7 @@ def test_save_and_load_session_roundtrip(tmp_path):
 
     # Load
     loaded = load_session(out_path)
-    assert loaded["input_basename"] == "Bluey.png"
+    assert loaded["input_basename"] == "test_image.png"
     assert loaded["palette_file"] == palette_file
     assert loaded["params"]["max_palette"] == 8
     assert loaded["params"]["line_step"] == 3

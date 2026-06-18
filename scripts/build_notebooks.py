@@ -89,13 +89,13 @@ def build_quickstart() -> nbf.NotebookNode:
         md(
             "## Step 2 — Load an image",
             "Change `IMAGE_PATH` to point at your own image. PNG, JPG, WebP, BMP, GIF, and TIFF are all supported.",
-            "If you don't have an image handy, the `Bluey.png` file in the repo root works.",
+            "If you don't have an image handy, `../tests/fixtures/test_image.png` (a synthetic 4-color image shipped with the repo) works.",
         ),
         code(
             "from pathlib import Path\n"
             "import notebook_helpers as nh\n"
             "\n"
-            "IMAGE_PATH = '../Bluey.png'  # <-- change this to your own image\n"
+            "IMAGE_PATH = '../tests/fixtures/test_image.png'  # <-- change this to your own image\n"
             "img = nh.load_image(IMAGE_PATH)\n"
             "print(f'Loaded: {img.size[0]}x{img.size[1]} {img.mode}')\n"
             "nh.display_image(img)\n",
@@ -155,7 +155,7 @@ def build_quickstart() -> nbf.NotebookNode:
             "## Next steps",
             "- Open `explore.ipynb` to understand what each step does (and why)",
             "- Open `craft.ipynb` for advanced usage: custom marker palettes, batch processing, reproducibility",
-            "- Or use the CLI directly: `hatchsvg Bluey.png out.svg --preset portrait`",
+            "- Or use the CLI directly: `hatchsvg tests/fixtures/test_image.png out.svg --preset portrait`",
         ),
     ]
     _assign_stable_ids(nb, "qs")
@@ -196,7 +196,7 @@ def build_explore() -> nbf.NotebookNode:
             "import notebook_helpers as nh\n"
             "from IPython.display import display, Markdown\n"
             "\n"
-            "img = nh.load_image('../Bluey.png')\n"
+            "img = nh.load_image('../tests/fixtures/test_image.png')\n"
             "print(f'Loaded: {img.size[0]}x{img.size[1]} {img.mode}')\n"
             "nh.display_image(img)",
         ),
@@ -319,7 +319,7 @@ def build_explore() -> nbf.NotebookNode:
             "    params=RenderParams(**result['params']),\n"
             "    palette=palette,\n"
             "    color_map=result['color_map_used'],\n"
-            "    image_path='../Bluey.png',\n"
+            "    image_path='../tests/fixtures/test_image.png',\n"
             ")\n"
             "session_path = Path('explore_session.json')\n"
             "nh.save_session_file(session, session_path)\n"
@@ -421,7 +421,7 @@ def build_craft() -> nbf.NotebookNode:
             "import notebook_helpers as nh\n"
             "from IPython.display import display, Markdown\n"
             "\n"
-            "img = nh.load_image('../Bluey.png')\n"
+            "img = nh.load_image('../tests/fixtures/test_image.png')\n"
             "palette = nh.load_palette('crayola_10ct_fine_line_classic')\n"
             "quant = nh.quantize_image(img, max_palette=6)\n"
             "matched = nh.match_to_palette(quant, palette)\n"
@@ -489,7 +489,7 @@ def build_craft() -> nbf.NotebookNode:
             "    params=RenderParams(**result['params']),\n"
             "    palette=palette,\n"
             "    color_map=result['color_map_used'],\n"
-            "    image_path='../Bluey.png',\n"
+            "    image_path='../tests/fixtures/test_image.png',\n"
             ")\n"
             "session_path = Path('craft_session.json')\n"
             "nh.save_session_file(session, session_path)\n"

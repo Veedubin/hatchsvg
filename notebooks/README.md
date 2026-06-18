@@ -1,7 +1,7 @@
 # hatchsvg — Tutorial Notebooks
 
 Three Jupyter notebooks that walk through hatchsvg at increasing levels of
-depth. **All three are tested to execute end-to-end on the shipped `Bluey.png`.**
+depth. **All three are tested to execute end-to-end on the shipped `tests/fixtures/test_image.png` (a small synthetic 4-color image).**
 
 ## Start here
 
@@ -50,7 +50,7 @@ runs the verification script (see "Verifying notebooks" below).
 3. Open any of the three notebooks in the `notebooks/` directory.
 4. Run the cells in order.
 
-The default sample image is `../Bluey.png` (one level up, in the repo root).
+The default sample image is `../tests/fixtures/test_image.png` (a synthetic 4-color image shipped with the repo).
 Change `IMAGE_PATH` in the first cell of `quickstart.ipynb` to point at your
 own image.
 

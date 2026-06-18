@@ -63,6 +63,9 @@ venv.bak/
 *.session.json
 !color_palettes/
 memory_data/
+# Source images for local testing (kept on disk, never committed)
+Bluey*.png
+bluey*.png
 
 # Boomerang plugin / session artifacts — these are tooling for the
 # development environment that lives alongside this repo, NOT part

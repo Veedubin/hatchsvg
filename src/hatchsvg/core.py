@@ -329,7 +329,7 @@ def hatch_path_for_mask(
 
     # Phase 2: Find connected components
     try:
-        from scipy.ndimage import center_of_mass, find_objects, label
+        from scipy.ndimage import center_of_mass, label
 
         labeled, num_features = label(mask)
     except ImportError:
@@ -338,10 +338,6 @@ def hatch_path_for_mask(
 
     if num_features <= 1:
         return _hatch_path_serpentine(mask, line_step, arc_radius)
-
-    # Get bounding boxes for each component so we can operate on slices only.
-    # find_objects returns one slice per component, in component-ID order.
-    slices = find_objects(labeled)
 
     # Vectorized centroid computation: one call returns all centroids.
     # center_of_mass expects indices 1..N (matching label IDs).
@@ -353,8 +349,11 @@ def hatch_path_for_mask(
 
     # Parallel or serial path generation per component.
     # Each component's path is independent — perfect for ProcessPoolExecutor.
-    # Pass only the slice + the masked-component boolean (not the full mask
-    # and not a full-size component_mask copy).
+    # NOTE: We use the full-size boolean mask (`labeled == component_id`) per
+    # component, NOT a bounding-box slice. A slice-based approach would
+    # produce coordinates relative to the slice origin (0, 0), but the final
+    # SVG needs absolute image coordinates. Using the full mask trades a bit
+    # of memory (~3GB temp for typical logos) for correctness.
     if n_workers is None:
         import os
 
@@ -363,7 +362,7 @@ def hatch_path_for_mask(
     if n_workers > 1:
         return _hatch_components_parallel(
             labeled=labeled,
-            slices=slices,
+            n_components=num_features,
             centroids=centroids,
             line_step=line_step,
             arc_radius=arc_radius,
@@ -372,27 +371,15 @@ def hatch_path_for_mask(
     # Serial path
     return _hatch_components_serial(
         labeled=labeled,
-        slices=slices,
+        n_components=num_features,
         centroids=centroids,
         line_step=line_step,
         arc_radius=arc_radius,
     )
 
 
-def _extract_component_slice(labeled: np.ndarray, slices: tuple, component_id: int) -> np.ndarray:
-    """Extract a tight boolean mask for one component from its bounding-box slice.
-
-    The slice is the bounding box of the component. The returned array has
-    shape (height_of_bbox, width_of_bbox) and is True only where the component
-    occupies that pixel. Operating on slices avoids copying the full mask.
-    """
-    y_slice, x_slice = slices
-    return labeled[y_slice, x_slice] == component_id
-
-
 def _hatch_one_component(
     labeled: np.ndarray,
-    slices: tuple,
     component_id: int,
     line_step: int,
     arc_radius: float,
@@ -400,27 +387,31 @@ def _hatch_one_component(
     """Generate the hatch path string for one component.
 
     Top-level function (not a closure) so ProcessPoolExecutor can pickle it.
+
+    Uses the full-size boolean mask (`labeled == component_id`) rather than
+    a bounding-box slice, so the path coordinates are absolute (relative to
+    the original image) and can be inserted directly into the final SVG.
     """
-    component_mask = _extract_component_slice(labeled, slices, component_id)
+    component_mask = labeled == component_id
     return _hatch_path_serpentine(component_mask, line_step, arc_radius)
 
 
 def _hatch_components_serial(
     labeled: np.ndarray,
-    slices: list,
+    n_components: int,
     centroids: list,
     line_step: int,
     arc_radius: float,
 ) -> str:
     """Generate hatch paths for all components sequentially."""
-    component_paths = [_hatch_one_component(labeled, s, i + 1, line_step, arc_radius) for i, s in enumerate(slices)]
+    component_paths = [_hatch_one_component(labeled, i + 1, line_step, arc_radius) for i in range(n_components)]
     ordered = _order_components_nearest_neighbor(component_paths, centroids)
     return " ".join(ordered)
 
 
 def _hatch_components_parallel(
     labeled: np.ndarray,
-    slices: list,
+    n_components: int,
     centroids: list,
     line_step: int,
     arc_radius: float,
@@ -444,7 +435,8 @@ def _hatch_components_parallel(
 
         ctx_kwargs["mp_context"] = multiprocessing.get_context("fork")
 
-    n_components = len(slices)
+    # Don't spawn more workers than components — overhead exceeds benefit.
+    effective_workers = min(n_workers, n_components)
     # Don't spawn more workers than components — overhead exceeds benefit.
     effective_workers = min(n_workers, n_components)
 
@@ -453,7 +445,6 @@ def _hatch_components_parallel(
             executor.submit(
                 _hatch_one_component,
                 labeled,
-                slices[i],
                 i + 1,
                 line_step,
                 arc_radius,

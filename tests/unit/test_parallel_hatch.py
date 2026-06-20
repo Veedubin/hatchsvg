@@ -7,6 +7,7 @@ between serial and parallel modes (determinism requirement for the
 golden file test).
 """
 
+import re
 import time
 
 import numpy as np
@@ -67,26 +68,25 @@ def _make_realistic_logo_mask(n_components: int = 80, comp_size: int = 50) -> np
 
 def test_parallel_output_matches_serial():
     """Serial and parallel modes produce byte-identical output."""
-    from scipy.ndimage import center_of_mass, find_objects, label
+    from scipy.ndimage import center_of_mass, label
 
     mask = _make_many_components_mask(n_components=50)
     labeled, num_features = label(mask)
     assert num_features > 10, "Need many components for this test"
 
-    slices = find_objects(labeled)
     centroids_array = center_of_mass(mask, labeled, range(1, num_features + 1))
     centroids = [(float(cx), float(cy)) for cy, cx in centroids_array]
 
     serial = _hatch_components_serial(
         labeled=labeled,
-        slices=slices,
+        n_components=num_features,
         centroids=centroids,
         line_step=4,
         arc_radius=2.0,
     )
     parallel = _hatch_components_parallel(
         labeled=labeled,
-        slices=slices,
+        n_components=num_features,
         centroids=centroids,
         line_step=4,
         arc_radius=2.0,
@@ -110,7 +110,7 @@ def test_parallel_is_faster_than_serial_on_many_components():
     3. Parallel completes in a reasonable time (not 10x slower)
     4. Reports the actual speedup ratio for visibility
     """
-    from scipy.ndimage import center_of_mass, find_objects, label
+    from scipy.ndimage import center_of_mass, label
 
     # Use a realistic-ish logo mask with components large enough that the
     # per-component work dominates the fork overhead (~10ms).
@@ -119,7 +119,6 @@ def test_parallel_is_faster_than_serial_on_many_components():
     if num_features < 30:
         pytest.skip(f"Need many components for perf test, got {num_features}")
 
-    slices = find_objects(labeled)
     centroids_array = center_of_mass(mask, labeled, range(1, num_features + 1))
     centroids = [(float(cx), float(cy)) for cy, cx in centroids_array]
 
@@ -128,7 +127,7 @@ def test_parallel_is_faster_than_serial_on_many_components():
         t0 = time.perf_counter()
         _hatch_components_serial(
             labeled=labeled,
-            slices=slices,
+            n_components=num_features,
             centroids=centroids,
             line_step=4,
             arc_radius=2.0,
@@ -140,7 +139,7 @@ def test_parallel_is_faster_than_serial_on_many_components():
         t0 = time.perf_counter()
         _hatch_components_parallel(
             labeled=labeled,
-            slices=slices,
+            n_components=num_features,
             centroids=centroids,
             line_step=4,
             arc_radius=2.0,
@@ -190,3 +189,57 @@ def test_hatch_path_for_mask_single_component_uses_serpentine():
     assert path.startswith("M")
     # Should be a single chain
     assert path.count("M") == 1 or path.count(" M") == 0
+
+
+def test_component_paths_use_absolute_coordinates_not_slice_local():
+    """REGRESSION TEST: path coordinates must be absolute, not slice-local.
+
+    A bug in v2.1.0 used scipy.ndimage.find_objects to extract a bounding-box
+    slice for each component, then ran _hatch_path_serpentine on the slice.
+    The function emits coordinates relative to the slice origin (0, 0),
+    so the resulting paths overlapped at the top-left of the image instead
+    of being placed correctly.
+
+    This test creates a mask with components at known positions, runs
+    hatch_path_for_mask, and verifies the extracted coordinates are within
+    the bounding box of their expected component (not collapsed to (0, 0)).
+    """
+    # Create a mask with components at distinct positions:
+    # - component 1: rows 100-110, cols 200-210 (mid-image)
+    # - component 2: rows 500-510, cols 800-810 (lower-right)
+    # - component 3: rows 50-60,   cols 50-60   (upper-left)
+    mask = np.zeros((600, 900), dtype=bool)
+    mask[100:110, 200:210] = True
+    mask[500:510, 800:810] = True
+    mask[50:60, 50:60] = True
+
+    path = hatch_path_for_mask(mask, line_step=2, continuous=True, arc_radius=2.0, n_workers=1)
+
+    # Extract all "M x y" tokens from the path
+    coords = [tuple(map(int, m.groups())) for m in re.finditer(r"M(\d+)\s+(\d+)", path)]
+
+    # Group coords by which component they belong to. Each component should
+    # have coords near its position, NOT all near (0, 0).
+    assert len(coords) >= 3, f"Expected 3+ M coords (one per component), got {len(coords)}"
+
+    # If the bug were present, ALL coords would be near (0, 0). Verify at
+    # least one coord is significantly far from (0, 0) — i.e., in the
+    # middle of the image.
+    far_coords = [(x, y) for x, y in coords if x > 50 or y > 50]
+    assert len(far_coords) > 0, (
+        f"All M coords are near (0, 0) — bug regression! "
+        f"Path coordinates must be absolute, not slice-local. "
+        f"First few coords: {coords[:5]}"
+    )
+
+    # Verify coords exist in the expected regions of each component:
+    # Component 1 (mid-image): coords should be in [200..210, 100..110]
+    # Component 2 (lower-right): coords should be in [800..810, 500..510]
+    # Component 3 (upper-left): coords should be in [50..60, 50..60]
+    in_comp1 = any(195 <= x <= 215 and 95 <= y <= 115 for x, y in coords)
+    in_comp2 = any(795 <= x <= 815 and 495 <= y <= 515 for x, y in coords)
+    in_comp3 = any(45 <= x <= 65 and 45 <= y <= 65 for x, y in coords)
+
+    assert in_comp1, f"No M coords found in component 1 region [200..210, 100..110]: {coords[:5]}"
+    assert in_comp2, f"No M coords found in component 2 region [800..810, 500..510]: {coords[:5]}"
+    assert in_comp3, f"No M coords found in component 3 region [50..60, 50..60]: {coords[:5]}"

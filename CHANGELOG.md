@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-06-20
+
+### Fixed
+- **CRITICAL: Path coordinates were relative to slice origin, not image origin**. v2.1.0 introduced a `scipy.ndimage.find_objects` optimization that extracted each component's bounding-box slice and ran `_hatch_path_serpentine` on the slice. The serpentine function emits coordinates relative to its input's origin, so all components ended up with paths starting at `(0, 0)` regardless of where the component actually was in the image. Visual result: all layer paths were stacked on top of each other at the top-left of the SVG, producing thousands of overlapping `M0 0 H1 ...` micro-segments. The fix reverts to using full-size boolean masks (`labeled == component_id`) per component — slightly more memory (~3GB temp for typical logos) but correct coordinates. A regression test (`test_component_paths_use_absolute_coordinates_not_slice_local`) verifies coords land in the correct component regions.
+
 ## [2.1.0] - 2026-06-19
 
 ### Added

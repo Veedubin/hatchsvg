@@ -280,6 +280,20 @@ def main():
             "Example: --hatch-angles=0,45,90,135"
         ),
     )
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help=(
+            "Number of parallel workers for per-component hatch generation. "
+            "None (default) = use os.cpu_count() if available, otherwise 1. "
+            "Set to 1 for serial output (deterministic, no fork overhead). "
+            "Note: parallelism only helps when components are large enough "
+            "to amortize ~10ms fork overhead each — typically components "
+            "of 100+ pixels per side. For tiny components, leave at default "
+            "or set to 1."
+        ),
+    )
 
     a = p.parse_args()
 
@@ -341,6 +355,16 @@ def main():
     # Override hatch_angles on params if the user specified --hatch-angles
     if hatch_angles:
         params.hatch_angles = hatch_angles
+
+    # Override n_workers on params if the user specified --workers
+    if a.workers is not None:
+        if a.workers < 1:
+            print(
+                f"Error: --workers must be >= 1 (got {a.workers}). Use 1 for serial.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        params.n_workers = a.workers
 
     # Run Process — wrap with friendly error handling
     try:

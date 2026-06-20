@@ -61,6 +61,10 @@ class RenderParams:
     arc_radius: float = 0.0
     hatch_angles: Optional[List[float]] = None
     hatch_angle: float = 0.0
+    # Parallel processing for per-component hatch generation. None = auto
+    # (use os.cpu_count() if available). 1 = serial. Only helps when
+    # components are large enough to amortize fork overhead (~10ms each).
+    n_workers: Optional[int] = None
 
 
 @dataclass
@@ -287,7 +291,13 @@ def _order_components_nearest_neighbor(component_paths: List[str], centroids: Li
     return ordered
 
 
-def hatch_path_for_mask(mask: np.ndarray, line_step: int, continuous: bool = False, arc_radius: float = 0.0) -> str:
+def hatch_path_for_mask(
+    mask: np.ndarray,
+    line_step: int,
+    continuous: bool = False,
+    arc_radius: float = 0.0,
+    n_workers: int | None = None,
+) -> str:
     """Flatten all hatch segments into ONE path 'd' string.
 
     When continuous=True, generates serpentine paths that alternate direction
@@ -296,16 +306,30 @@ def hatch_path_for_mask(mask: np.ndarray, line_step: int, continuous: bool = Fal
 
     Phase 2: For discontinuous regions (islands), generates separate paths
     per connected component and orders them with nearest-neighbor TSP.
+    When the layer has many components, this phase is parallelized across
+    CPU cores via ProcessPoolExecutor — each component's hatch generation
+    runs in a separate worker. Centroid computation is vectorized via
+    scipy.ndimage.center_of_mass.
 
     Phase 3: When arc_radius > 0, adds small arcs at row-end 180° reversals
     to smooth transitions.
+
+    Args:
+        mask: Boolean mask array (height × width).
+        line_step: Pixels between hatch rows.
+        continuous: If True, use serpentine + component splitting.
+        arc_radius: Arc radius for row-end U-turns (0 = disabled).
+        n_workers: Number of parallel workers for component processing.
+            None = use all available CPU cores. 1 = serial (no parallelism).
+            Set to 1 if you want deterministic output regardless of CPU count
+            (e.g. for snapshot tests).
     """
     if not continuous:
         return _hatch_path_legacy(mask, line_step)
 
     # Phase 2: Find connected components
     try:
-        from scipy.ndimage import label
+        from scipy.ndimage import center_of_mass, find_objects, label
 
         labeled, num_features = label(mask)
     except ImportError:
@@ -315,21 +339,131 @@ def hatch_path_for_mask(mask: np.ndarray, line_step: int, continuous: bool = Fal
     if num_features <= 1:
         return _hatch_path_serpentine(mask, line_step, arc_radius)
 
-    # Generate path for each component
-    component_paths = []
-    centroids = []
-    for i in range(1, num_features + 1):
-        component_mask = labeled == i
-        path = _hatch_path_serpentine(component_mask, line_step, arc_radius)
-        component_paths.append(path)
-        # Compute centroid for ordering
-        y_coords, x_coords = np.where(component_mask)
-        centroids.append((float(np.mean(x_coords)), float(np.mean(y_coords))))
+    # Get bounding boxes for each component so we can operate on slices only.
+    # find_objects returns one slice per component, in component-ID order.
+    slices = find_objects(labeled)
 
-    # Order components by nearest-neighbor
-    ordered_paths = _order_components_nearest_neighbor(component_paths, centroids)
+    # Vectorized centroid computation: one call returns all centroids.
+    # center_of_mass expects indices 1..N (matching label IDs).
+    component_indices = list(range(1, num_features + 1))
+    centroids_array = center_of_mass(mask, labeled, component_indices)
+    # centroids_array is a list of (cy, cx) tuples — convert to (cx, cy)
+    # for nearest-neighbor ordering (matches original signature).
+    centroids = [(float(cx), float(cy)) for cy, cx in centroids_array]
 
-    return " ".join(ordered_paths)
+    # Parallel or serial path generation per component.
+    # Each component's path is independent — perfect for ProcessPoolExecutor.
+    # Pass only the slice + the masked-component boolean (not the full mask
+    # and not a full-size component_mask copy).
+    if n_workers is None:
+        import os
+
+        n_workers = os.cpu_count() or 1
+
+    if n_workers > 1:
+        return _hatch_components_parallel(
+            labeled=labeled,
+            slices=slices,
+            centroids=centroids,
+            line_step=line_step,
+            arc_radius=arc_radius,
+            n_workers=n_workers,
+        )
+    # Serial path
+    return _hatch_components_serial(
+        labeled=labeled,
+        slices=slices,
+        centroids=centroids,
+        line_step=line_step,
+        arc_radius=arc_radius,
+    )
+
+
+def _extract_component_slice(labeled: np.ndarray, slices: tuple, component_id: int) -> np.ndarray:
+    """Extract a tight boolean mask for one component from its bounding-box slice.
+
+    The slice is the bounding box of the component. The returned array has
+    shape (height_of_bbox, width_of_bbox) and is True only where the component
+    occupies that pixel. Operating on slices avoids copying the full mask.
+    """
+    y_slice, x_slice = slices
+    return labeled[y_slice, x_slice] == component_id
+
+
+def _hatch_one_component(
+    labeled: np.ndarray,
+    slices: tuple,
+    component_id: int,
+    line_step: int,
+    arc_radius: float,
+) -> str:
+    """Generate the hatch path string for one component.
+
+    Top-level function (not a closure) so ProcessPoolExecutor can pickle it.
+    """
+    component_mask = _extract_component_slice(labeled, slices, component_id)
+    return _hatch_path_serpentine(component_mask, line_step, arc_radius)
+
+
+def _hatch_components_serial(
+    labeled: np.ndarray,
+    slices: list,
+    centroids: list,
+    line_step: int,
+    arc_radius: float,
+) -> str:
+    """Generate hatch paths for all components sequentially."""
+    component_paths = [_hatch_one_component(labeled, s, i + 1, line_step, arc_radius) for i, s in enumerate(slices)]
+    ordered = _order_components_nearest_neighbor(component_paths, centroids)
+    return " ".join(ordered)
+
+
+def _hatch_components_parallel(
+    labeled: np.ndarray,
+    slices: list,
+    centroids: list,
+    line_step: int,
+    arc_radius: float,
+    n_workers: int,
+) -> str:
+    """Generate hatch paths for all components in parallel.
+
+    The component paths are computed in parallel across workers, then ordered
+    by nearest-neighbor using the pre-computed centroids. Output is identical
+    to serial mode because ordering depends only on centroids (which were
+    computed deterministically before the parallel section).
+    """
+    import os
+    from concurrent.futures import ProcessPoolExecutor
+
+    # Use 'fork' on Linux/macOS for fast startup. 'spawn' on Windows would
+    # reimport hatchsvg which is slow.
+    ctx_kwargs = {}
+    if os.name == "posix":
+        import multiprocessing
+
+        ctx_kwargs["mp_context"] = multiprocessing.get_context("fork")
+
+    n_components = len(slices)
+    # Don't spawn more workers than components — overhead exceeds benefit.
+    effective_workers = min(n_workers, n_components)
+
+    with ProcessPoolExecutor(max_workers=effective_workers, **ctx_kwargs) as executor:
+        futures = [
+            executor.submit(
+                _hatch_one_component,
+                labeled,
+                slices[i],
+                i + 1,
+                line_step,
+                arc_radius,
+            )
+            for i in range(n_components)
+        ]
+        component_paths = [f.result() for f in futures]
+
+    ordered = _order_components_nearest_neighbor(component_paths, centroids)
+    return " ".join(ordered)
 
 
 def border_mask(mask: np.ndarray) -> np.ndarray:
@@ -347,10 +481,15 @@ def border_mask(mask: np.ndarray) -> np.ndarray:
     return mask & ~interior
 
 
-def outline_path_for_mask(mask: np.ndarray, continuous: bool = False, arc_radius: float = 0.0) -> str:
+def outline_path_for_mask(
+    mask: np.ndarray,
+    continuous: bool = False,
+    arc_radius: float = 0.0,
+    n_workers: int | None = None,
+) -> str:
     """Flatten all outline segments into one path string (border only)."""
     bmask = border_mask(mask)
-    return hatch_path_for_mask(bmask, line_step=1, continuous=continuous, arc_radius=arc_radius)
+    return hatch_path_for_mask(bmask, line_step=1, continuous=continuous, arc_radius=arc_radius, n_workers=n_workers)
 
 
 def luminance(rgb: Tuple[int, int, int]) -> float:
@@ -825,9 +964,17 @@ def _create_layer_groups(
 ) -> List[str]:
     """Generate the SVG group strings for a specific layer."""
     d_hatch = (
-        "" if style.is_white else hatch_path_for_mask(mask, style.line_step, params.continuous_paths, params.arc_radius)
+        ""
+        if style.is_white
+        else hatch_path_for_mask(
+            mask,
+            style.line_step,
+            params.continuous_paths,
+            params.arc_radius,
+            n_workers=params.n_workers,
+        )
     )
-    d_outline = outline_path_for_mask(mask, params.continuous_paths, params.arc_radius)
+    d_outline = outline_path_for_mask(mask, params.continuous_paths, params.arc_radius, n_workers=params.n_workers)
 
     groups: List[str] = []
     stroke_str = f"rgb({style.stroke_rgb[0]},{style.stroke_rgb[1]},{style.stroke_rgb[2]})"
@@ -1503,6 +1650,7 @@ def _load_config_cli_with_preset(
         arc_radius=merged.get("arc_radius", 0.0),
         hatch_angles=merged.get("hatch_angles", None),
         hatch_angle=merged.get("hatch_angle", 0.0),
+        n_workers=merged.get("n_workers", None),
     )
 
     # Load palette if provided (not affected by preset)

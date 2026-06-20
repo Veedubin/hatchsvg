@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-06-19
+
+### Added
+- **`--workers N` CLI flag** for opt-in parallel hatch generation. Each connected component's hatch generation runs in a separate worker via `ProcessPoolExecutor` (fork context on POSIX for fast startup). Centroids are now computed in a single vectorized `scipy.ndimage.center_of_mass` call instead of an O(N) `np.where` + `np.mean` loop. Per-component work uses bounding-box slices via `scipy.ndimage.find_objects`, eliminating ~3GB of temporary full-mask copies for typical logos.
+- **6 new tests** in `tests/unit/test_parallel_hatch.py` covering serial-vs-parallel output equivalence, the new `n_workers` parameter, single-component / zero-component edge cases, and a smoke benchmark.
+
+### Fixed
+- **Serpentine path chaining bug** in `_hatch_path_serpentine`. Previously the function emitted a new `M` command at the start of every row, breaking the chain even when the previous row had ended exactly where the next row began. With `arc_radius > 0` (e.g. `--preset logo`), this produced thousands of disconnected 2-pixel arcs in the outline path — visually rendering as "random dots" instead of a continuous shape boundary. Now tracks `chain_live` across rows so a single `M` spans the whole connected component. Golden file dropped from 5724 to 3942 bytes (32% smaller).
+
+### Notes
+- **Parallelism is opt-in via `--workers N` (default: `os.cpu_count()`)**. Benchmarking shows that for components smaller than ~100×100 pixels, serial is actually faster because Python's `ProcessPoolExecutor` fork overhead (~50-100ms per task) dominates per-component work. Use `--workers 1` to force serial. The real performance win for many small components comes from vectorizing the per-row hatch walk itself, which is a separate effort.
+- **No public API changes**. `RenderParams` gained an `n_workers: Optional[int]` field (additive, defaults to `None` = auto). All 164 tests pass. The golden file test was regenerated with the new path format.
+
 ## [2.0.0] - 2026-06-17
 
 ### Changed

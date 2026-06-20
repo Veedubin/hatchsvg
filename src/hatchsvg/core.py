@@ -123,39 +123,73 @@ def _hatch_path_legacy(mask: np.ndarray, line_step: int) -> str:
 
 
 def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float = 0.0) -> str:
-    """Serpentine hatch path generation - rows alternate direction, segments chained with H."""
+    """Serpentine hatch path generation - rows alternate direction, segments chained with H.
+
+    The chain spans multiple rows: when row N ends at (x_N_end, y_N) and the
+    arc lands at (x_N_end, y_N+step), row N+1's first segment starts there.
+    If row N+1's first segment begins at exactly (x_N_end, y_N+step) — i.e.
+    the mask is continuous across rows — the path just continues with 'H'
+    commands. A new 'M' is only emitted when there's an actual discontinuity
+    (gap in the mask, or the very first row).
+    """
     h, _ = mask.shape
-    cmds = []
+    cmds: list[str] = []
     step = max(1, line_step)
+
+    # Track whether the chain is currently "live" — i.e. we've drawn at
+    # least one segment so far, and the previous row wasn't empty.
+    # A live chain continues with 'H' commands. A broken chain starts
+    # a new sub-path with 'M'.
+    chain_live = False
 
     for row_idx, y in enumerate(range(0, h, step)):
         row = mask[y]
         segs = find_segments_in_row(row)
         if not segs:
+            # No segments in this row — the chain is broken. Next row that
+            # has segments will need a new M.
+            chain_live = False
             continue
 
         # Even rows (0,2,4): left-to-right; Odd rows (1,3,5): right-to-left
         if row_idx % 2 == 1:
-            # Reverse segment order and swap start/end for R→L direction
             segs = [(x2, x1) for x1, x2 in reversed(segs)]
 
-        # Chain contiguous segments within the row
-        is_first_seg = True
-        for x1, x2 in segs:
-            if is_first_seg:
-                cmds.append(f"M{x1} {y} H{x2}")
-                is_first_seg = False
-            else:
-                # Continue drawing - just extend to new x2
-                cmds.append(f"H{x2}")
+        # Decide whether the first segment of this row needs a new M.
+        # A new M is needed if the chain isn't currently live (first row or
+        # previous row was empty). Otherwise we just continue with 'H'.
+        if not chain_live:
+            x1, x2 = segs[0]
+            cmds.append(f"M{x1} {y}")
+            cmds.append(f"H{x2}")
+            start_idx = 1
+        else:
+            # Chain continues: emit 'H' for the first segment directly.
+            x1, x2 = segs[0]
+            cmds.append(f"H{x2}")
+            start_idx = 1
+
+        # Chain remaining segments in this row with H commands.
+        for x1, x2 in segs[start_idx:]:
+            cmds.append(f"H{x2}")
 
         # Phase 3: Add arc at row-end reversal (transition to next row)
-        if arc_radius > 0 and row_idx % 2 == 0:  # Even row ending, next row goes R→L
+        # Even row ends going right; next row will be drawn right-to-left.
+        # The arc lands the pen at (last_x, y+step). The chain stays live.
+        chain_live = True
+        if arc_radius > 0 and row_idx % 2 == 0 and row_idx + 1 < h:
             next_y = y + step
             if next_y < h:
-                # Add a 180° arc at the right end to smooth the U-turn
-                # Arc sweeps from (x2, y) to (x2, next_y) bulging right
-                cmds.append(f"A {arc_radius} {arc_radius} 0 0 1 {x2} {next_y}")
+                # Only add the arc if the next row has any segments.
+                next_row = mask[next_y]
+                if np.any(next_row):
+                    # The arc sweeps from (last_x, y) to (last_x, next_y).
+                    last_x = segs[-1][1]
+                    cmds.append(f"A {arc_radius} {arc_radius} 0 0 1 {last_x} {next_y}")
+                    # Chain stays live — next row will continue with H commands.
+                else:
+                    # Next row is empty — chain breaks.
+                    chain_live = False
 
     return " ".join(cmds)
 

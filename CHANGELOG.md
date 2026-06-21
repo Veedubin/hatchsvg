@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-06-20
+
+### Removed
+- **`--workers` CLI flag** and the underlying `ProcessPoolExecutor`-based per-component parallel hatch generation. In practice, Python's fork overhead (~50-100ms per task) dominated per-component work for typical logos with small components, making the parallel implementation 9x **slower** than serial on a 16-core machine. The `_hatch_components_parallel`, `_hatch_components_serial`, and `_hatch_one_component` helper functions have been removed. The `n_workers` field on `RenderParams` has been removed. The `hatch_path_for_mask` function is back to its v1.x shape: a single inlined per-component loop. The vectorized `scipy.ndimage.center_of_mass` centroid computation is preserved (was always a clear win, no fork involved).
+- **`tests/unit/test_parallel_hatch.py`** deleted entirely.
+
+### Notes
+- The serpentine chaining fix (v2.1.0) and the absolute-coordinates fix (v2.1.1) are both preserved. Render output is byte-identical to v2.1.1 — the only behavior change is performance (slightly faster on small components, since we no longer pay fork overhead).
+- 158/158 tests pass. Coverage 59% (unchanged). The e2e golden file is byte-identical.
+
 ## [2.1.1] - 2026-06-20
 
 ### Fixed

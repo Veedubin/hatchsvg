@@ -52,6 +52,7 @@ PRESETS: Dict[str, PresetSpec] = {
         "separate_outline": True,
         "continuous_paths": True,
         "arc_radius": 3.0,
+        "skip_bg": True,
     },
     "line-art": {
         "description": "Pencil sketches, ink drawings, fine line illustrations. Very fine hatch + low min-pixels so thin strokes survive.",
@@ -61,6 +62,7 @@ PRESETS: Dict[str, PresetSpec] = {
         "white_medium": True,
         "continuous_paths": True,
         "arc_radius": 2.0,
+        "skip_bg": True,
     },
     "photo": {
         "description": "Detailed photos, landscapes, complex gradients. High palette count + fine hatch for maximum detail.",
@@ -76,6 +78,7 @@ PRESETS: Dict[str, PresetSpec] = {
         "line_step": 4,
         "continuous_paths": True,
         "arc_radius": 6.0,
+        "skip_bg": True,
     },
     "fast": {
         "description": "Quick preview, low-fidelity draft. Few colors, wide hatch, no optimization. Renders in seconds.",
@@ -83,6 +86,7 @@ PRESETS: Dict[str, PresetSpec] = {
         "line_step": 8,
         "continuous_paths": False,
         "separate_outline": False,
+        "skip_bg": True,
     },
 }
 

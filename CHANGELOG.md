@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-06-22
+
+### Fixed
+- **Background was always rendered as a hatch layer, regardless of `--no-skip-background` flag**. The `--no-skip-background` flag was defined in the CLI but never read — `params.skip_bg` always stayed at its default `False`. As a result, the dominant background color was always included in the output, even for users who expected it to be skipped (the default). For a pen-plotter tool this is the wrong default — backgrounds should be skipped by default; users who want the full image hatched (e.g. photo mosaics) can opt in with `--no-skip-background`. The fix wires the flag: when `--no-skip-background` is NOT passed, `params.skip_bg = True` (background detected and excluded). When passed, the background layer is included. Added 2 regression tests (`test_cli_skip_background_default_excludes_bg_layer`, `test_cli_no_skip_background_includes_bg_layer`).
+
+### Changed
+- **`skip_bg: True` added to 4 presets** (`logo`, `line-art`, `sketch`, `fast`) where skipping the background is the right default. The `portrait` and `photo` presets do NOT set `skip_bg` because the user may want the full image hatched for photographic use cases. Override with `--no-skip-background` if needed.
+
 ## [2.2.0] - 2026-06-20
 
 ### Removed

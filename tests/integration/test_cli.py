@@ -21,14 +21,20 @@ pytestmark = pytest.mark.skipif(
 # Generate a small test PNG (procedural, no network) for CLI smoke tests
 @pytest.fixture(scope="module")
 def small_test_png(tmp_path_factory):
-    """Create a 32x32 RGBA test PNG with a red square on transparent background."""
+    """Create a 32x32 RGBA test PNG with a red square on opaque white background."""
     import numpy as np
     from PIL import Image
 
     img_array = np.zeros((32, 32, 4), dtype=np.uint8)
-    img_array[:, :, 3] = 0  # fully transparent
-    img_array[8:24, 8:24, 0] = 220  # red
-    img_array[8:24, 8:24, 3] = 255  # opaque
+    # Opaque white background (so background detection has something to find)
+    img_array[:, :, 0] = 255
+    img_array[:, :, 1] = 255
+    img_array[:, :, 2] = 255
+    img_array[:, :, 3] = 255
+    # Red square in the middle
+    img_array[8:24, 8:24, 0] = 220
+    img_array[8:24, 8:24, 1] = 0
+    img_array[8:24, 8:24, 2] = 0
     img = Image.fromarray(img_array, mode="RGBA")
     out = tmp_path_factory.mktemp("cli_inputs") / "tiny.png"
     img.save(out, "PNG")
@@ -385,3 +391,61 @@ def test_cli_hatch_angles_invalid_value_errors(small_test_png, tmp_path):
     assert result.returncode != 0
     err = result.stderr.lower()
     assert "hatch-angles" in err or "comma-separated" in err or "numbers" in err
+
+
+def test_cli_skip_background_default_excludes_bg_layer(small_test_png, tmp_path):
+    """By default (no flag), the dominant background color is skipped from
+    the output. This is a v2.2.1+ behavior — earlier versions had an
+    orphan --no-skip-background flag that was registered but never read.
+    """
+    out_svg = tmp_path / "out.svg"
+    result = subprocess.run(
+        [str(VENV_HATCHSVG), str(small_test_png), str(out_svg), "--preset", "logo"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    # The synthetic test image is a red square on white background. The
+    # white background should be detected and skipped by default.
+    assert "Skip BG" in result.stdout, f"Expected 'Skip BG' in stdout: {result.stdout}"
+
+    # Without the bg, the red square is the only color. With the logo
+    # preset's separate_outline=True, that's 1 color * 2 (hatch+outline)
+    # = 2 groups. Compare to the --no-skip-background case below which
+    # should have 2 colors * 2 = 4 groups.
+    content = out_svg.read_text(encoding="utf-8")
+    total_groups = content.count("<g ")
+    assert total_groups == 2, (
+        f"Expected 2 groups (1 non-bg color * hatch+outline), got {total_groups}. Output likely includes background."
+    )
+
+
+def test_cli_no_skip_background_includes_bg_layer(small_test_png, tmp_path):
+    """--no-skip-background disables background skipping, so ALL detected
+    color layers (including the background) appear in the output.
+    """
+    out_svg = tmp_path / "out.svg"
+    result = subprocess.run(
+        [
+            str(VENV_HATCHSVG),
+            str(small_test_png),
+            str(out_svg),
+            "--preset",
+            "logo",
+            "--no-skip-background",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    # --no-skip-background should NOT print the "Skip BG" message
+    assert "Skip BG" not in result.stdout, f"Expected NO 'Skip BG' in stdout with --no-skip-background: {result.stdout}"
+    # With --no-skip-background, the background is included. The synthetic
+    # test image has 2 colors (white bg + red square), so 2 * 2 = 4 groups.
+    content = out_svg.read_text(encoding="utf-8")
+    total_groups = content.count("<g ")
+    assert total_groups == 4, (
+        f"Expected 4 groups (2 colors * hatch+outline) with --no-skip-background, got {total_groups}"
+    )

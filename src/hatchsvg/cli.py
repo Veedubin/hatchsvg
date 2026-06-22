@@ -342,6 +342,13 @@ def main():
     if hatch_angles:
         params.hatch_angles = hatch_angles
 
+    # Skip background by default (the dominant color at the image border).
+    # --no-skip-background disables this for users who want the full image
+    # hatched (e.g. photo mosaics where the "background" is itself a color
+    # they want plotted).
+    if not a.no_skip_background:
+        params.skip_bg = True
+
     # Run Process — wrap with friendly error handling
     try:
         color_map_used, processing_stats = process_image_to_hatched_svg(

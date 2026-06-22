@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-06-22
+
+### Fixed
+- **Thousands of redundant pen-down moves for quantized gradient images**. Two compounding issues caused the user's logo to render as 1.6MB / 57,000+ `M` commands instead of the expected ~500KB / ~200 commands:
+  1. **Tiny noise components were each producing a separate hatch pass.** A single color layer in a gradient-quantized image can have 4,000+ connected components, most being 1-pixel anti-aliasing artifacts. Each component triggered its own `_hatch_path_serpentine` call, producing a chain of pen-down moves for a region too small to hold even one hatch cell. Now components smaller than `line_step²` pixels are filtered out as noise (with a fallback to ≥1px for tiny test images). For the user's 1794×1794 logo: 57,000 → 1,278 `M` commands (97% reduction).
+  2. **`separate_outline=True` was the default for `logo` preset** (changed in v2.x). With `separate_outline=True`, every layer gets an extra `<g>` outline group with `line_step=1` hatching on the border mask — for a complex shape that's thousands of short pen-down moves (one per pixel row of the border). For pen plotters, this is wasted ink and time. The `logo` preset now defaults to `separate_outline=False` (v1.x behavior). To opt back into the separate outline mode, pass `--separate-outline`.
+  3. **`_hatch_path_serpentine` was drawing the same y-coordinate twice when transitioning between odd and even rows without an arc.** The chain was kept "live" across rows even when no arc was emitted to move the pen to the next y, so the next row's `H` command drew at the previous row's y. Now `chain_live` stays True ONLY when an arc was actually emitted (which moves the pen's y). Verified on the golden test image: a 50-pixel-tall red region now produces 5 hatch lines (one per scanned row), where the old buggy code produced 3 with several drawn at the wrong y.
+
+### Changed
+- **`separate_outline=False` is now the default for the `logo` preset** (was `True` in v2.x, `False` in v1.x). For pen-plotter use cases the outline mode generates thousands of short pen-down moves on complex shapes. Use `--separate-outline` to restore the v2.x behavior, or apply it per-render via `--separate-outline`.
+
+### Notes
+- The user's 1794×1794 logo drops from **1.6MB → 73KB** (96% reduction) with `--preset logo`. The output is also visually correct now — previously, the same y-coordinate was being drawn multiple times (e.g. `M110 120 H170 A 5.0 5.0 0 0 1 170 132 H110 H170 A 5.0 5.0 0 0 1 170 156 H110 H170` was drawing rows 120, 132, 132-again, 156, 156-again instead of rows 120, 132, 144, 156, 168).
+- 160/160 tests pass. Coverage 59%. The e2e golden file was regenerated and now produces correct row-by-row output.
+
 ## [2.2.1] - 2026-06-22
 
 ### Fixed

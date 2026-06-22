@@ -125,21 +125,31 @@ def _hatch_path_legacy(mask: np.ndarray, line_step: int) -> str:
 def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float = 0.0) -> str:
     """Serpentine hatch path generation - rows alternate direction, segments chained with H.
 
-    The chain spans multiple rows: when row N ends at (x_N_end, y_N) and the
-    arc lands at (x_N_end, y_N+step), row N+1's first segment starts there.
-    If row N+1's first segment begins at exactly (x_N_end, y_N+step) — i.e.
-    the mask is continuous across rows — the path just continues with 'H'
-    commands. A new 'M' is only emitted when there's an actual discontinuity
-    (gap in the mask, or the very first row).
+    Within each row, contiguous segments are chained with H commands to avoid
+    pen lifts. Between rows, the chain breaks (a new M is emitted) UNLESS
+    we just emitted an arc to (last_x, next_y) — in which case the pen is
+    already at the next row's y and the chain continues naturally.
+
+    Arc emission rules:
+      - arc_radius > 0
+      - this row is even-indexed (going left-to-right, so the pen is on the
+        right edge — the arc drops down to the next row at the same x)
+      - the next row has at least one segment
+
+    For all other cases (odd rows, arc_radius=0, next row empty), the chain
+    breaks at the row boundary and a new M is emitted for the next row.
+
+    This guarantees every row is drawn at its own y, eliminating the bug
+    where the old code would re-draw the same y-coordinate twice when
+    transitioning from an odd row to an even row without an arc.
     """
     h, _ = mask.shape
     cmds: list[str] = []
     step = max(1, line_step)
 
-    # Track whether the chain is currently "live" — i.e. we've drawn at
-    # least one segment so far, and the previous row wasn't empty.
-    # A live chain continues with 'H' commands. A broken chain starts
-    # a new sub-path with 'M'.
+    # Whether the pen is currently positioned at (x, y_of_next_row_to_draw)
+    # i.e. an arc just fired and the next row's H commands will draw on the
+    # correct y without needing a new M.
     chain_live = False
 
     for row_idx, y in enumerate(range(0, h, step)):
@@ -155,41 +165,33 @@ def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float =
         if row_idx % 2 == 1:
             segs = [(x2, x1) for x1, x2 in reversed(segs)]
 
-        # Decide whether the first segment of this row needs a new M.
-        # A new M is needed if the chain isn't currently live (first row or
-        # previous row was empty). Otherwise we just continue with 'H'.
         if not chain_live:
-            x1, x2 = segs[0]
+            x1, _ = segs[0]
             cmds.append(f"M{x1} {y}")
-            cmds.append(f"H{x2}")
-            start_idx = 1
-        else:
-            # Chain continues: emit 'H' for the first segment directly.
-            x1, x2 = segs[0]
-            cmds.append(f"H{x2}")
-            start_idx = 1
+        # else: chain continues from previous arc — first segment is just an H.
 
-        # Chain remaining segments in this row with H commands.
-        for x1, x2 in segs[start_idx:]:
+        # Emit H for every segment in this row. Segments within a row are
+        # always chained (SVG H only changes x). M and A commands change y.
+        for _, x2 in segs:
             cmds.append(f"H{x2}")
 
-        # Phase 3: Add arc at row-end reversal (transition to next row)
-        # Even row ends going right; next row will be drawn right-to-left.
-        # The arc lands the pen at (last_x, y+step). The chain stays live.
-        chain_live = True
+        # Determine whether to add an arc that bridges to next_y.
+        # The arc moves the pen from (last_x, y) to (last_x, y+step).
+        added_arc = False
         if arc_radius > 0 and row_idx % 2 == 0 and row_idx + 1 < h:
             next_y = y + step
             if next_y < h:
-                # Only add the arc if the next row has any segments.
                 next_row = mask[next_y]
                 if np.any(next_row):
-                    # The arc sweeps from (last_x, y) to (last_x, next_y).
                     last_x = segs[-1][1]
                     cmds.append(f"A {arc_radius} {arc_radius} 0 0 1 {last_x} {next_y}")
-                    # Chain stays live — next row will continue with H commands.
-                else:
-                    # Next row is empty — chain breaks.
-                    chain_live = False
+                    added_arc = True
+
+        # Chain is live ONLY when we just emitted an arc — otherwise the pen
+        # is still at this row's y and the next row's H would re-draw it.
+        chain_live = added_arc
+
+    return " ".join(cmds)
 
     return " ".join(cmds)
 
@@ -327,10 +329,46 @@ def hatch_path_for_mask(
     if num_features <= 1:
         return _hatch_path_serpentine(mask, line_step, arc_radius)
 
+    # Filter out tiny components (quantization noise, anti-aliased edge speckle).
+    # A component smaller than ~one hatch cell can't carry meaningful shading
+    # — it would produce wasted pen moves. This is the dominant source of
+    # "thousands of extra operations" for gradient images quantized to few
+    # colors (typical logo use case): a single color layer can have 4000+
+    # connected components, most being 1-pixel anti-aliasing artifacts.
+    #
+    # The threshold scales with the step: at step=5 a 25-pixel component
+    # holds one hatch cell; at step=2 only 4 pixels do. For tiny test images
+    # (4×4 etc) we use the lower bound of 1 pixel so the smallest legitimate
+    # shape still gets rendered.
+    min_component_pixels = max(1, line_step * line_step)
+    component_sizes = np.bincount(labeled.ravel())
+    # bincount[0] is the background; component_indices are 1..N.
+    keep_mask = component_sizes >= min_component_pixels
+    keep_mask[0] = False  # never keep background
+    keep_indices = np.nonzero(keep_mask)[0]
+
+    if keep_indices.size == 0:
+        # Fall back to keeping all components with at least 1 pixel so we
+        # still produce *something* for tiny test images where the threshold
+        # is too aggressive.
+        keep_mask = component_sizes >= 1
+        keep_mask[0] = False
+        keep_indices = np.nonzero(keep_mask)[0]
+        if keep_indices.size == 0:
+            return ""
+
+    # Drop the tiny components from the mask and re-label the survivors so
+    # their IDs are dense 1..N (centroid / TSP code below expects that).
+    if keep_indices.size < num_features:
+        keep_set = set(keep_indices.tolist())
+        filtered_mask = np.isin(labeled, list(keep_set))
+        labeled, num_features = label(filtered_mask)
+
+    component_indices = list(range(1, num_features + 1))
+
     # Vectorized centroid computation: one call returns all centroids.
     # center_of_mass expects indices 1..N (matching label IDs).
-    component_indices = list(range(1, num_features + 1))
-    centroids_array = center_of_mass(mask, labeled, component_indices)
+    centroids_array = center_of_mass(labeled, labeled, component_indices)
     # centroids_array is a list of (cy, cx) tuples — convert to (cx, cy)
     # for nearest-neighbor ordering (matches original signature).
     centroids = [(float(cx), float(cy)) for cy, cx in centroids_array]
@@ -840,7 +878,14 @@ def _create_layer_groups(
     d_hatch = (
         "" if style.is_white else hatch_path_for_mask(mask, style.line_step, params.continuous_paths, params.arc_radius)
     )
-    d_outline = outline_path_for_mask(mask, params.continuous_paths, params.arc_radius)
+    # Only compute the outline path when the caller actually wants it. For
+    # pen plotters, outline mode generates thousands of short pen-down moves
+    # (one per pixel-row of the border mask) — wasted ink and time. The
+    # `separate_outline` flag defaults to False in v2.2.2+, so we skip this
+    # computation entirely unless explicitly requested.
+    d_outline = (
+        outline_path_for_mask(mask, params.continuous_paths, params.arc_radius) if params.separate_outline else ""
+    )
 
     groups: List[str] = []
     stroke_str = f"rgb({style.stroke_rgb[0]},{style.stroke_rgb[1]},{style.stroke_rgb[2]})"

@@ -46,10 +46,10 @@ PRESETS: Dict[str, PresetSpec] = {
         "arc_radius": 5.0,
     },
     "logo": {
-        "description": "Brand marks, flat colors, clean edges. Bold hatch + separate outline for crisp boundaries.",
+        "description": "Brand marks, flat colors, clean edges. Bold hatch, single combined group per color (no separate outline — outline mode generates one short line per pixel row and wastes pen moves on complex shapes).",
         "max_palette": 6,
         "line_step": 5,
-        "separate_outline": True,
+        "separate_outline": False,
         "continuous_paths": True,
         "arc_radius": 3.0,
         "skip_bg": True,

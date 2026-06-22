@@ -411,13 +411,14 @@ def test_cli_skip_background_default_excludes_bg_layer(small_test_png, tmp_path)
     assert "Skip BG" in result.stdout, f"Expected 'Skip BG' in stdout: {result.stdout}"
 
     # Without the bg, the red square is the only color. With the logo
-    # preset's separate_outline=True, that's 1 color * 2 (hatch+outline)
-    # = 2 groups. Compare to the --no-skip-background case below which
-    # should have 2 colors * 2 = 4 groups.
+    # preset's separate_outline=False (v2.2.2+), that's 1 color * 1 (hatch only)
+    # = 1 group. Compare to the --no-skip-background case below which
+    # should have 2 colors * 1 = 2 groups.
     content = out_svg.read_text(encoding="utf-8")
     total_groups = content.count("<g ")
-    assert total_groups == 2, (
-        f"Expected 2 groups (1 non-bg color * hatch+outline), got {total_groups}. Output likely includes background."
+    assert total_groups == 1, (
+        f"Expected 1 group (1 non-bg color, separate_outline=False), got {total_groups}. "
+        f"Output likely includes separate outline group or background."
     )
 
 
@@ -443,9 +444,10 @@ def test_cli_no_skip_background_includes_bg_layer(small_test_png, tmp_path):
     # --no-skip-background should NOT print the "Skip BG" message
     assert "Skip BG" not in result.stdout, f"Expected NO 'Skip BG' in stdout with --no-skip-background: {result.stdout}"
     # With --no-skip-background, the background is included. The synthetic
-    # test image has 2 colors (white bg + red square), so 2 * 2 = 4 groups.
+    # test image has 2 colors (white bg + red square), and logo preset now
+    # uses separate_outline=False (v2.2.2+), so 2 * 1 = 2 groups.
     content = out_svg.read_text(encoding="utf-8")
     total_groups = content.count("<g ")
-    assert total_groups == 4, (
-        f"Expected 4 groups (2 colors * hatch+outline) with --no-skip-background, got {total_groups}"
+    assert total_groups == 2, (
+        f"Expected 2 groups (2 colors, separate_outline=False) with --no-skip-background, got {total_groups}"
     )

@@ -9,13 +9,17 @@ from hatchsvg.core import RenderParams, render_single_layer_svg
 
 @pytest.fixture
 def tiny_rgba_png(tmp_path):
-    """Create a 4x4 RGBA PNG with a single red pixel for layer rendering tests."""
-    img = np.zeros((4, 4, 4), dtype=np.uint8)
-    img[:, :, 3] = 255  # fully opaque
-    img[:, :, :3] = 255  # white background
-    img[1:3, 1:3, 0] = 255  # red square
-    img[1:3, 1:3, 1] = 0
-    img[1:3, 1:3, 2] = 0
+    """Create a 32x32 RGBA PNG with a 4x4 red square on a white background.
+
+    32x32 is large enough that any reasonable line_step (1-5) will scan
+    at least one row of the red square. Smaller images (e.g. 4x4) hit
+    edge cases where no hatch row intersects the colored region.
+    """
+    img = np.full((32, 32, 4), (255, 255, 255, 255), dtype=np.uint8)
+    # Red square at rows 14-17, cols 14-17
+    img[14:18, 14:18, 0] = 255
+    img[14:18, 14:18, 1] = 0
+    img[14:18, 14:18, 2] = 0
     out = tmp_path / "tiny.png"
     Image.fromarray(img, mode="RGBA").save(out, "PNG")
     return out

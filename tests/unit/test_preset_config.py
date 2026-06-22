@@ -90,7 +90,7 @@ def test_preset_alone_applies_all_preset_values():
     params, _, _, _ = get_run_configuration(args, preset_name="logo")
     assert params.max_palette == 6  # logo preset value
     assert params.line_step == 5
-    assert params.separate_outline is True
+    assert params.separate_outline is False
     assert params.continuous_paths is True
     assert params.arc_radius == 3.0
 
@@ -101,7 +101,7 @@ def test_explicit_flag_overrides_preset():
     params, _, _, _ = get_run_configuration(args, preset_name="logo")
     assert params.line_step == 2, "explicit --line-step should override preset"
     assert params.max_palette == 6, "non-explicit field should fall back to preset"
-    assert params.separate_outline is True
+    assert params.separate_outline is False
 
 
 def test_preset_unknown_name_raises_value_error():

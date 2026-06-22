@@ -650,24 +650,70 @@ def build_color_index_map(orig_rgb: np.ndarray, alpha: np.ndarray, alpha_thresho
 
 
 def _detect_background(
-    visible: np.ndarray, color_idx: np.ndarray, palette: List[Tuple[int, int, int]]
-) -> Optional[int]:
-    """Helper to detect dominant border color for background skipping."""
+    visible: np.ndarray,
+    color_idx: np.ndarray,
+    palette: List[Tuple[int, int, int]],
+    near_threshold: float = 50.0,
+) -> set:
+    """Detect the dominant border color and return all palette indices close to it.
+
+    Background detection for pen plotters needs to be generous: when an image
+    is quantized to N colors, anti-aliased pixels at the background boundary
+    often get quantized to a slightly-different color (a near-duplicate shade
+    of the background). If we only skip the EXACT background color, those
+    near-duplicates produce hatched regions in the negative space (between
+    letters, between bear ears, etc.) that should be paper.
+
+    Parameters
+    ----------
+    visible
+        Boolean mask of pixels to consider (typically ``alpha > threshold``).
+    color_idx
+        Per-pixel palette index array.
+    palette
+        RGB color list, length = number of palette colors.
+    near_threshold
+        Maximum Euclidean RGB distance from the detected background for a
+        palette color to also be treated as background. Default 30 covers
+        the typical anti-alias quantization noise band (RGB units).
+
+    Returns
+    -------
+    set of int
+        Set of palette indices that should be skipped as background. Empty
+        if no border pixels are found.
+    """
     h, w = visible.shape
     border = visible.copy()
     if h > 2 and w > 2:
         border[1:-1, 1:-1] = False
 
     border_vals = color_idx[border]
-    if border_vals.size > 0:
-        cnt = np.bincount(border_vals.astype(int))
-        bg_idx = int(cnt.argmax())
-        if 0 <= bg_idx < len(palette):
-            print(f"Background detected as index {bg_idx}, RGB={palette[bg_idx]}")
-            return bg_idx
+    if border_vals.size == 0:
+        print("No border pixels → not skipping background.")
+        return set()
 
-    print("No border pixels or invalid detection → not skipping background.")
-    return None
+    cnt = np.bincount(border_vals.astype(int))
+    bg_idx = int(cnt.argmax())
+    if not (0 <= bg_idx < len(palette)):
+        return set()
+
+    bg_rgb = palette[bg_idx]
+    bg_idxs: set = {bg_idx}
+    # Find any other palette color whose RGB is close to the detected bg.
+    # This catches quantization artifacts that create near-duplicate shades.
+    for i, c in enumerate(palette):
+        if i == bg_idx:
+            continue
+        dr = c[0] - bg_rgb[0]
+        dg = c[1] - bg_rgb[1]
+        db = c[2] - bg_rgb[2]
+        dist = (dr * dr + dg * dg + db * db) ** 0.5
+        if dist <= near_threshold:
+            bg_idxs.add(i)
+            print(f"  Also treating idx {i} ({c}) as background (RGB dist {dist:.1f} <= {near_threshold})")
+    print(f"Background detected: idx {bg_idx} RGB={bg_rgb}, skipping {len(bg_idxs)} near-duplicate shade(s)")
+    return bg_idxs
 
 
 def _is_white_medium_pixel(rgb: Tuple[int, int, int], params: RenderParams) -> bool:
@@ -1216,9 +1262,9 @@ def process_image_to_hatched_svg(
     else:
         pass  # Already done in step 2
 
-    bg_idx = None
+    bg_idxs: set = set()
     if params.skip_bg:
-        bg_idx = _detect_background(visible, color_idx, palette)
+        bg_idxs = _detect_background(visible, color_idx, palette)
 
     all_groups: List[str] = []
     layers_count = 0
@@ -1239,7 +1285,7 @@ def process_image_to_hatched_svg(
                 if idx_int < 0:
                     progress.update(task4, advance=1)
                     continue
-                if params.skip_bg and bg_idx == idx_int:
+                if params.skip_bg and idx_int in bg_idxs:
                     _print(f"Skip BG idx {idx_int}")
                     progress.update(task4, advance=1)
                     continue
@@ -1302,7 +1348,7 @@ def process_image_to_hatched_svg(
             idx_int = int(idx)
             if idx_int < 0:
                 continue
-            if params.skip_bg and bg_idx == idx_int:
+            if params.skip_bg and idx_int in bg_idxs:
                 _print(f"Skip BG idx {idx_int}")
                 continue
 

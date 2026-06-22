@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3] - 2026-06-22
+
+### Fixed
+- **Hatching appearing in negative space (between letters, between bear ears)** due to anti-aliasing quantization noise. When an image is quantized to N colors, anti-aliased pixels at the background boundary often get bucketed into a near-duplicate shade (e.g. `(251, 235, 196)` instead of the detected background `(243, 215, 167)`). The previous `_detect_background` only returned ONE palette index, so all near-duplicate shades still got hatched — producing visible clusters of hatch lines in areas that should be paper. The fix extends `_detect_background` to return a set of indices: every palette color whose RGB Euclidean distance from the detected background is within a threshold (default 50 RGB units) is also treated as background and skipped. For the user's `rstp-warden-logo.png` this skips the `(251, 235, 196)` highlight shade, dropping the output from 5 layers to 4 and reducing file size by ~7%.
+
+### Notes
+- The threshold is configurable via the `near_threshold` parameter of `_detect_background` for callers who want to tune it.
+- 166/166 tests pass (added 6 new tests in `tests/unit/test_background.py` for the new behavior). Coverage 59%.
+
 ## [2.2.2] - 2026-06-22
 
 ### Fixed

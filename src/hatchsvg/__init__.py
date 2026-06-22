@@ -12,4 +12,4 @@ Originally released as ``png2svg`` (v1.0.0 - v1.2.0). Renamed to
 better describe the algorithm (hatching, not tracing).
 """
 
-__version__ = "2.2.2"
+__version__ = "2.2.3"

@@ -122,6 +122,37 @@ def _hatch_path_legacy(mask: np.ndarray, line_step: int) -> str:
     return " ".join(cmds)
 
 
+def _maybe_add_arc(
+    mask: np.ndarray,
+    y: int,
+    step: int,
+    row_idx: int,
+    segs: List[Tuple[int, int]],
+    arc_radius: float,
+    cmds: List[str],
+) -> bool:
+    """If conditions are met, append an arc command bridging to the next row.
+
+    Returns True if an arc was added (meaning the pen moved to next_y and
+    the chain can stay live), False otherwise.
+    """
+    if arc_radius <= 0 or row_idx % 2 != 0:
+        return False
+
+    h = mask.shape[0]
+    next_y = y + step
+    if next_y >= h:
+        return False
+
+    next_row = mask[next_y]
+    if not np.any(next_row):
+        return False
+
+    last_x = segs[-1][1]
+    cmds.append(f"A {arc_radius} {arc_radius} 0 0 1 {last_x} {next_y}")
+    return True
+
+
 def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float = 0.0) -> str:
     """Serpentine hatch path generation - rows alternate direction, segments chained with H.
 
@@ -156,8 +187,6 @@ def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float =
         row = mask[y]
         segs = find_segments_in_row(row)
         if not segs:
-            # No segments in this row — the chain is broken. Next row that
-            # has segments will need a new M.
             chain_live = False
             continue
 
@@ -168,30 +197,14 @@ def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float =
         if not chain_live:
             x1, _ = segs[0]
             cmds.append(f"M{x1} {y}")
-        # else: chain continues from previous arc — first segment is just an H.
 
-        # Emit H for every segment in this row. Segments within a row are
-        # always chained (SVG H only changes x). M and A commands change y.
+        # Emit H for every segment in this row.
         for _, x2 in segs:
             cmds.append(f"H{x2}")
 
-        # Determine whether to add an arc that bridges to next_y.
-        # The arc moves the pen from (last_x, y) to (last_x, y+step).
-        added_arc = False
-        if arc_radius > 0 and row_idx % 2 == 0 and row_idx + 1 < h:
-            next_y = y + step
-            if next_y < h:
-                next_row = mask[next_y]
-                if np.any(next_row):
-                    last_x = segs[-1][1]
-                    cmds.append(f"A {arc_radius} {arc_radius} 0 0 1 {last_x} {next_y}")
-                    added_arc = True
-
         # Chain is live ONLY when we just emitted an arc — otherwise the pen
         # is still at this row's y and the next row's H would re-draw it.
-        chain_live = added_arc
-
-    return " ".join(cmds)
+        chain_live = _maybe_add_arc(mask, y, step, row_idx, segs, arc_radius, cmds)
 
     return " ".join(cmds)
 
@@ -1275,6 +1288,57 @@ def process_image_to_hatched_svg(
     # Collect layer data for potential reordering
     layer_data: List[Dict[str, Any]] = []
 
+    def _process_one_layer(idx_int: int, rgb: Tuple[int, int, int], mask: np.ndarray, pal_hex: str) -> bool:
+        """Process a single color layer and append to layer_data. Returns True if a layer was generated."""
+        nonlocal layers_count
+
+        # Determine per-layer hatch_angle
+        if params.hatch_angles:
+            angles_list = params.hatch_angles
+            layer_angle = angles_list[min(layers_count, len(angles_list) - 1)] if angles_list else 0.0
+        else:
+            layer_angle = params.hatch_angle
+
+        # Build per-layer params with hatch_angle
+        layer_params = RenderParams(**{**params.__dict__, "hatch_angle": layer_angle})
+
+        # Compute layer stats if requested
+        if show_stats:
+            layer_stat = compute_layer_stats(mask, layer_params.line_step)
+            layer_stat["color_name"] = rough_color_name(rgb)
+            layer_stat["hex"] = pal_hex
+            processing_stats["total_segments"] += layer_stat["segments"]
+            processing_stats["legacy_pen_lifts"] += layer_stat["legacy_lifts"]
+            processing_stats["optimized_pen_lifts"] += layer_stat["optimized_lifts"]
+            processing_stats["layer_stats"].append(layer_stat)
+
+        result = _process_single_layer(idx_int, rgb, mask, layer_params, marker_counters, marker_palette, color_map)
+
+        if not (result.is_layer_generated and result.color_map_entry):
+            return False
+
+        # Extract path start for optimize_travel
+        path_start = (0.0, 0.0)
+        if result.groups:
+            first_group = result.groups[0]
+            match = re.search(r'd="([^"]*)"', first_group)
+            if match:
+                path_start = _extract_path_start(match.group(1))
+
+        layer_data.append(
+            {
+                "groups": result.groups,
+                "color_map_entry": result.color_map_entry,
+                "pal_hex": pal_hex,
+                "hatch_angle": layer_angle,
+                "path_start": path_start,
+            }
+        )
+        color_map_used[pal_hex] = result.color_map_entry
+        if result.groups:
+            layers_count += 1
+        return True
+
     # Step 4: Processing layers
     total_layers = len(used)
     if use_progress:
@@ -1293,55 +1357,7 @@ def process_image_to_hatched_svg(
                 mask = (color_idx == idx_int) & visible
                 rgb = palette[idx_int]
                 pal_hex = "#" + rgb_to_hex(rgb)
-
-                # Determine per-layer hatch_angle
-                if params.hatch_angles:
-                    angles_list = params.hatch_angles
-                    layer_angle = angles_list[min(layers_count, len(angles_list) - 1)] if angles_list else 0.0
-                else:
-                    layer_angle = params.hatch_angle
-
-                # Build per-layer params with hatch_angle
-                layer_params = RenderParams(**{**params.__dict__, "hatch_angle": layer_angle})
-
-                # Compute layer stats if requested
-                layer_stat = None
-                if show_stats:
-                    layer_stat = compute_layer_stats(mask, layer_params.line_step)
-                    layer_stat["color_name"] = rough_color_name(rgb)
-                    layer_stat["hex"] = pal_hex
-                    processing_stats["total_segments"] += layer_stat["segments"]
-                    processing_stats["legacy_pen_lifts"] += layer_stat["legacy_lifts"]
-                    processing_stats["optimized_pen_lifts"] += layer_stat["optimized_lifts"]
-                    processing_stats["layer_stats"].append(layer_stat)
-
-                result = _process_single_layer(
-                    idx_int, rgb, mask, layer_params, marker_counters, marker_palette, color_map
-                )
-
-                if result.is_layer_generated and result.color_map_entry:
-                    # Extract path start for optimize_travel
-                    path_start = (0.0, 0.0)
-                    if result.groups:
-                        # Find first path's start coordinate
-                        first_group = result.groups[0]
-                        match = re.search(r'd="([^"]*)"', first_group)
-                        if match:
-                            path_start = _extract_path_start(match.group(1))
-
-                    layer_data.append(
-                        {
-                            "groups": result.groups,
-                            "color_map_entry": result.color_map_entry,
-                            "pal_hex": pal_hex,
-                            "hatch_angle": layer_angle,
-                            "path_start": path_start,
-                        }
-                    )
-                    color_map_used[pal_hex] = result.color_map_entry
-                    if result.groups:
-                        layers_count += 1
-
+                _process_one_layer(idx_int, rgb, mask, pal_hex)
                 progress.update(task4, description=f"[4/5] Processing layers ({i + 1}/{total_layers})...", advance=1)
     else:
         for i, idx in enumerate(used):
@@ -1355,50 +1371,7 @@ def process_image_to_hatched_svg(
             mask = (color_idx == idx_int) & visible
             rgb = palette[idx_int]
             pal_hex = "#" + rgb_to_hex(rgb)
-
-            # Determine per-layer hatch_angle
-            if params.hatch_angles:
-                angles_list = params.hatch_angles
-                layer_angle = angles_list[min(layers_count, len(angles_list) - 1)] if angles_list else 0.0
-            else:
-                layer_angle = params.hatch_angle
-
-            # Build per-layer params with hatch_angle
-            layer_params = RenderParams(**{**params.__dict__, "hatch_angle": layer_angle})
-
-            # Compute layer stats if requested
-            if show_stats:
-                layer_stat = compute_layer_stats(mask, layer_params.line_step)
-                layer_stat["color_name"] = rough_color_name(rgb)
-                layer_stat["hex"] = pal_hex
-                processing_stats["total_segments"] += layer_stat["segments"]
-                processing_stats["legacy_pen_lifts"] += layer_stat["legacy_lifts"]
-                processing_stats["optimized_pen_lifts"] += layer_stat["optimized_lifts"]
-                processing_stats["layer_stats"].append(layer_stat)
-
-            result = _process_single_layer(idx_int, rgb, mask, layer_params, marker_counters, marker_palette, color_map)
-
-            if result.is_layer_generated and result.color_map_entry:
-                # Extract path start for optimize_travel
-                path_start = (0.0, 0.0)
-                if result.groups:
-                    first_group = result.groups[0]
-                    match = re.search(r'd="([^"]*)"', first_group)
-                    if match:
-                        path_start = _extract_path_start(match.group(1))
-
-                layer_data.append(
-                    {
-                        "groups": result.groups,
-                        "color_map_entry": result.color_map_entry,
-                        "pal_hex": pal_hex,
-                        "hatch_angle": layer_angle,
-                        "path_start": path_start,
-                    }
-                )
-                color_map_used[pal_hex] = result.color_map_entry
-                if result.groups:
-                    layers_count += 1
+            _process_one_layer(idx_int, rgb, mask, pal_hex)
 
     # --optimize-travel: reorder layers by nearest-neighbor
     if optimize_travel and len(layer_data) > 1:
@@ -1475,7 +1448,7 @@ def _load_config_session(args) -> Tuple[RenderParams, Optional[Dict], Optional[D
         min_pixels=p_dict.get("min_pixels", 200),
         stroke_width=p_dict.get("stroke_width", 0.5),
         outline_width=p_dict.get("outline_width", 0.8),
-        skip_bg=p_dict.get("skip_background", False),
+        skip_bg=p_dict.get("skip_bg", False),
         white_medium=p_dict.get("white_medium", False),
         paper_white_soft=p_dict.get("paper_white_soft", 20),
         scale=p_dict.get("scale", 1.0),
@@ -1614,13 +1587,13 @@ def _load_config_cli_with_preset(
     if args.palette_file:
         marker_palette = load_marker_palette(Path(args.palette_file))
 
-    # Recompute stroke/outline widths the same way _load_config_cli does
+    # Recompute stroke/outline widths the same way _load_config_cli does.
+    # Only auto-derive from marker palette if the user didn't explicitly
+    # pass --stroke-width or --outline-width on the command line.
     sw = params.stroke_width
-    if sw == 0.5 and marker_palette and "tip_width_mm" in marker_palette:
-        # 0.5 is the RenderParams default; only override if user didn't pass --stroke-width
-        if "stroke_width" not in explicit:
-            sw = float(marker_palette["tip_width_mm"])
-    if params.outline_width == 0.8 and "outline_width" not in explicit:
+    if "stroke_width" not in explicit and marker_palette and "tip_width_mm" in marker_palette:
+        sw = float(marker_palette["tip_width_mm"])
+    if "outline_width" not in explicit:
         params = RenderParams(**{**params.__dict__, "stroke_width": sw, "outline_width": max(1.0, sw * 1.6)})
     else:
         params = RenderParams(**{**params.__dict__, "stroke_width": sw})
@@ -1663,37 +1636,41 @@ def _extract_explicit_args(args) -> Dict[str, Any]:
             current = getattr(args, action.dest)
         except AttributeError:
             continue
+
+        # Check whether the user explicitly passed this flag on the command
+        # line. For store_true/store_false actions, presence (value=True or
+        # False) is explicit. For other actions, we check the _explicit_{dest}
+        # attribute set by _TrackedAction in cli.py. If that attribute is
+        # missing (e.g. in tests that use plain argparse), fall back to
+        # comparing current != action.default.
+        flag_present = getattr(args, f"_explicit_{action.dest}", None)
+        if flag_present is None:
+            # _TrackedAction not used — fall back to default comparison
+            if isinstance(action, (_argparse._StoreTrueAction, _argparse._StoreFalseAction)):
+                flag_present = current is True
+            else:
+                flag_present = current != action.default
+        else:
+            flag_present = bool(flag_present)
+
         # Normalize: --no-skip-background sets args.no_skip_background=True but
         # means skip_bg=False on RenderParams.
         if action.dest == "no_skip_background" and current is True:
             explicit["skip_bg"] = False
             continue
-        # store_true: explicit iff True
-        if isinstance(action, _argparse._StoreTrueAction):
-            if current is True:
-                explicit[action.dest] = current
-            continue
-        # store_false: explicit iff False
-        if isinstance(action, _argparse._StoreFalseAction):
-            if current is False:
-                explicit[action.dest] = current
-            continue
-        # Anything else: explicit iff different from default
-        if current != action.default:
+        if flag_present:
             explicit[action.dest] = current
 
     return explicit
 
 
-def _display_stats_table(stats: Dict[str, Any]) -> None:
-    """Display the processing statistics table."""
-    if not HAS_RICH:
-        _display_stats_table_simple(stats)
-        return
+def _compute_display_stats(stats: Dict[str, Any]) -> Dict[str, Any]:
+    """Derive display-ready values from raw processing stats.
 
-    console = Console()
-
-    # Calculate derived stats
+    Returns a dict with keys: total_segments, legacy_lifts, optimized_lifts,
+    layers, w, h, colors, reduction_pct, legacy_time, optimized_time,
+    time_saved, time_saved_pct.
+    """
     total_segments = stats.get("total_segments", 0)
     legacy_lifts = stats.get("legacy_pen_lifts", 0)
     optimized_lifts = stats.get("optimized_pen_lifts", 0)
@@ -1701,7 +1678,6 @@ def _display_stats_table(stats: Dict[str, Any]) -> None:
     w, h = stats.get("image_dimensions", (0, 0))
     colors = stats.get("colors_detected", 0)
 
-    # Calculate lift reduction
     reduction_pct = 0.0
     if legacy_lifts > 0:
         reduction_pct = (1 - optimized_lifts / legacy_lifts) * 100
@@ -1712,21 +1688,46 @@ def _display_stats_table(stats: Dict[str, Any]) -> None:
     time_saved = legacy_time - optimized_time
     time_saved_pct = (time_saved / legacy_time * 100) if legacy_time > 0 else 0
 
+    return {
+        "total_segments": total_segments,
+        "legacy_lifts": legacy_lifts,
+        "optimized_lifts": optimized_lifts,
+        "layers": layers,
+        "w": w,
+        "h": h,
+        "colors": colors,
+        "reduction_pct": reduction_pct,
+        "legacy_time": legacy_time,
+        "optimized_time": optimized_time,
+        "time_saved": time_saved,
+        "time_saved_pct": time_saved_pct,
+    }
+
+
+def _display_stats_table(stats: Dict[str, Any]) -> None:
+    """Display the processing statistics table."""
+    if not HAS_RICH:
+        _display_stats_table_simple(stats)
+        return
+
+    console = Console()
+    d = _compute_display_stats(stats)
+
     # Main stats table
     table = Table(title="Processing Statistics", show_header=True, header_style="bold magenta")
     table.add_column("Statistic", style="cyan", width=30)
     table.add_column("Value", style="green", width=20)
 
-    table.add_row("Image Dimensions", f"{w} x {h}")
-    table.add_row("Colors Detected", str(colors))
-    table.add_row("Layers Generated", str(layers))
-    table.add_row("Total Segments", f"{total_segments:,}")
-    table.add_row("Pen Lifts (legacy)", f"{legacy_lifts:,}")
-    table.add_row("Pen Lifts (optimized)", f"{optimized_lifts:,}")
-    table.add_row("Pen Lift Reduction", f"{reduction_pct:.1f}%")
-    table.add_row("Estimated Plot Time (legacy)", f"~{legacy_time / 60:.1f} min")
-    table.add_row("Estimated Plot Time (optimized)", f"~{optimized_time / 60:.1f} min")
-    table.add_row("Time Saved", f"~{time_saved / 60:.1f} min ({time_saved_pct:.0f}%)")
+    table.add_row("Image Dimensions", f"{d['w']} x {d['h']}")
+    table.add_row("Colors Detected", str(d["colors"]))
+    table.add_row("Layers Generated", str(d["layers"]))
+    table.add_row("Total Segments", f"{d['total_segments']:,}")
+    table.add_row("Pen Lifts (legacy)", f"{d['legacy_lifts']:,}")
+    table.add_row("Pen Lifts (optimized)", f"{d['optimized_lifts']:,}")
+    table.add_row("Pen Lift Reduction", f"{d['reduction_pct']:.1f}%")
+    table.add_row("Estimated Plot Time (legacy)", f"~{d['legacy_time'] / 60:.1f} min")
+    table.add_row("Estimated Plot Time (optimized)", f"~{d['optimized_time'] / 60:.1f} min")
+    table.add_row("Time Saved", f"~{d['time_saved'] / 60:.1f} min ({d['time_saved_pct']:.0f}%)")
 
     console.print(Panel(table, title="[bold]Processing Statistics[/bold]", expand=False))
 
@@ -1754,35 +1755,21 @@ def _display_stats_table(stats: Dict[str, Any]) -> None:
 
 def _display_stats_table_simple(stats: Dict[str, Any]) -> None:
     """Display stats using simple print formatting (when Rich is not available)."""
-    total_segments = stats.get("total_segments", 0)
-    legacy_lifts = stats.get("legacy_pen_lifts", 0)
-    optimized_lifts = stats.get("optimized_pen_lifts", 0)
-    layers = stats.get("layers_generated", 0)
-    w, h = stats.get("image_dimensions", (0, 0))
-    colors = stats.get("colors_detected", 0)
-
-    reduction_pct = 0.0
-    if legacy_lifts > 0:
-        reduction_pct = (1 - optimized_lifts / legacy_lifts) * 100
-
-    legacy_time = (legacy_lifts * 0.1) + (total_segments * 0.02)
-    optimized_time = (optimized_lifts * 0.1) + (total_segments * 0.02)
-    time_saved = legacy_time - optimized_time
-    time_saved_pct = (time_saved / legacy_time * 100) if legacy_time > 0 else 0
+    d = _compute_display_stats(stats)
 
     print("\n" + "=" * 50)
     print("Processing Statistics")
     print("=" * 50)
-    print(f"  Image Dimensions:     {w} x {h}")
-    print(f"  Colors Detected:       {colors}")
-    print(f"  Layers Generated:      {layers}")
-    print(f"  Total Segments:        {total_segments:,}")
-    print(f"  Pen Lifts (legacy):    {legacy_lifts:,}")
-    print(f"  Pen Lifts (optimized): {optimized_lifts:,}")
-    print(f"  Pen Lift Reduction:   {reduction_pct:.1f}%")
-    print(f"  Est. Plot Time (leg):  ~{legacy_time / 60:.1f} min")
-    print(f"  Est. Plot Time (opt):  ~{optimized_time / 60:.1f} min")
-    print(f"  Time Saved:            ~{time_saved / 60:.1f} min ({time_saved_pct:.0f}%)")
+    print(f"  Image Dimensions:     {d['w']} x {d['h']}")
+    print(f"  Colors Detected:       {d['colors']}")
+    print(f"  Layers Generated:      {d['layers']}")
+    print(f"  Total Segments:        {d['total_segments']:,}")
+    print(f"  Pen Lifts (legacy):    {d['legacy_lifts']:,}")
+    print(f"  Pen Lifts (optimized): {d['optimized_lifts']:,}")
+    print(f"  Pen Lift Reduction:   {d['reduction_pct']:.1f}%")
+    print(f"  Est. Plot Time (leg):  ~{d['legacy_time'] / 60:.1f} min")
+    print(f"  Est. Plot Time (opt):  ~{d['optimized_time'] / 60:.1f} min")
+    print(f"  Time Saved:            ~{d['time_saved'] / 60:.1f} min ({d['time_saved_pct']:.0f}%)")
     print("=" * 50)
 
     layer_stats = stats.get("layer_stats", [])

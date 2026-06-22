@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.4] - 2026-06-22
+
+### Fixed
+- **CLI forced `skip_bg=True` overriding preset intent.** The `main()` function unconditionally set `params.skip_bg = True` after `get_run_configuration()` returned, which meant `--preset portrait` (which intentionally leaves `skip_bg=False`) always had background skipped. The override has been removed — presets now control `skip_bg` as designed.
+- **Session load used wrong field name `skip_background` instead of `skip_bg`.** `save_session` writes `asdict(params)` which produces the key `skip_bg`, but `_load_config_session` read `skip_background`. Every session loaded from disk silently got `skip_bg=False` regardless of what was saved. Fixed to read `skip_bg`.
+- **`--max-palette 12 --preset logo` gave 6 colors, not 12.** `_extract_explicit_args` compared `current != action.default` to detect explicit flags. When the user passed `--max-palette 12` and argparse's default was also 12, the flag was treated as NOT explicit, so the preset's `max_palette=6` won. Fixed by introducing `_TrackedAction` — a custom argparse Action that records whether the flag was actually invoked on the command line, regardless of value.
+- **Magic number `0.5` in `_load_config_cli_with_preset` stroke-width logic.** The code checked `sw == 0.5` to decide whether to auto-derive stroke width from the marker palette. If `RenderParams.stroke_width` default ever changed, this would silently break. Fixed to check `"stroke_width" not in explicit` instead.
+
+### Changed
+- **Extracted duplicated layer-processing loop** in `process_image_to_hatched_svg` into a single `_process_one_layer` inner function (~60 lines of duplication eliminated).
+- **Extracted duplicated stats computation** in `_display_stats_table` / `_display_stats_table_simple` into `_compute_display_stats` (~30 lines of duplication eliminated).
+- **Extracted nested arc logic** from `_hatch_path_serpentine` into `_maybe_add_arc` helper (4 levels of nesting → 1).
+- **Removed dead code**: unreachable `return` statement in `_hatch_path_serpentine`, redundant `row_idx + 1 < h` check in arc logic.
+
+### Notes
+- 166/166 tests pass. Coverage 59% (unchanged). Ruff clean, format clean.
+- The `_TrackedAction` class in `cli.py` is a new public API surface — it's used by all non-store_true CLI arguments to track explicit invocation. Tests that build fake argparse parsers continue to work via a fallback in `_extract_explicit_args`.
+
 ## [2.2.3] - 2026-06-22
 
 ### Fixed

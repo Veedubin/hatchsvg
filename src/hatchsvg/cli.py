@@ -17,6 +17,21 @@ from hatchsvg.core import (
 )
 from hatchsvg.presets import PRESETS, list_presets
 
+
+class _TrackedAction(argparse.Action):
+    """An argparse Action that records whether it was explicitly invoked.
+
+    Sets ``args._explicit_{dest} = True`` on the namespace when the user
+    passes the flag on the command line. This lets ``_extract_explicit_args``
+    distinguish "user passed --max-palette 12" from "argparse defaulted to 12"
+    even when the value happens to match the default.
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        setattr(namespace, f"_explicit_{self.dest}", True)
+
+
 _ERROR_HINTS = {
     "No layers produced.": (
         "No layers were produced. Try:\n"
@@ -170,36 +185,42 @@ def main():
         "--max-palette",
         type=int,
         default=12,
+        action=_TrackedAction,
         help="Maximum number of palette colors (default: 12)",
     )
     p.add_argument(
         "--line-step",
         type=int,
         default=4,
+        action=_TrackedAction,
         help="Line step size for hatching (default: 4)",
     )
     p.add_argument(
         "--alpha-threshold",
         type=int,
         default=10,
+        action=_TrackedAction,
         help="Alpha threshold for visibility (default: 10)",
     )
     p.add_argument(
         "--min-pixels",
         type=int,
         default=200,
+        action=_TrackedAction,
         help="Minimum pixels for a layer (default: 200)",
     )
     p.add_argument(
         "--stroke-width",
         type=float,
         default=None,
+        action=_TrackedAction,
         help="Stroke width for hatch lines (default: auto)",
     )
     p.add_argument(
         "--outline-width",
         type=float,
         default=None,
+        action=_TrackedAction,
         help="Outline stroke width (default: auto)",
     )
     p.add_argument(
@@ -216,12 +237,14 @@ def main():
         "--paper-white-soft",
         type=int,
         default=20,
+        action=_TrackedAction,
         help="Soft threshold for paper white (default: 20)",
     )
     p.add_argument(
         "--scale",
         type=float,
         default=1.0,
+        action=_TrackedAction,
         help="Scale factor for output (default: 1.0)",
     )
     p.add_argument(
@@ -229,11 +252,12 @@ def main():
         action="store_true",
         help="Generate separate outline paths",
     )
-    p.add_argument("--palette-file", help="Path to marker palette JSON file")
+    p.add_argument("--palette-file", action=_TrackedAction, help="Path to marker palette JSON file")
     p.add_argument(
         "--naming-mode",
         choices=["inkscape", "flat"],
         default="inkscape",
+        action=_TrackedAction,
         help="Layer naming mode (default: inkscape)",
     )
     p.add_argument(
@@ -245,6 +269,7 @@ def main():
         "--arc-radius",
         type=float,
         default=0.0,
+        action=_TrackedAction,
         help="Add arc smoothing at row-end 180° reversals (0 = disabled)",
     )
     p.add_argument(
@@ -341,13 +366,6 @@ def main():
     # Override hatch_angles on params if the user specified --hatch-angles
     if hatch_angles:
         params.hatch_angles = hatch_angles
-
-    # Skip background by default (the dominant color at the image border).
-    # --no-skip-background disables this for users who want the full image
-    # hatched (e.g. photo mosaics where the "background" is itself a color
-    # they want plotted).
-    if not a.no_skip_background:
-        params.skip_bg = True
 
     # Run Process — wrap with friendly error handling
     try:

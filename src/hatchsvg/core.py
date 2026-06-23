@@ -109,27 +109,86 @@ def find_segments_in_row(row: np.ndarray) -> List[Tuple[int, int]]:
     return segs
 
 
+def _find_all_segments(mask: np.ndarray, step: int) -> Tuple[List[Tuple[int, int, List[Tuple[int, int]]]], np.ndarray]:
+    """Pre-compute all hatch segments for every sampled row in one vectorized pass.
+
+    Returns
+    -------
+    row_data : list of (row_idx, y, segments)
+        Only rows that have at least one segment are included.
+        ``row_idx`` is the 0-based index into the sampled rows
+        (i.e. the i-th row in ``mask[::step]``).
+        ``y`` is the actual y-coordinate (``row_idx * step``).
+        ``segments`` is a list of ``(x_start, x_end)`` tuples, identical
+        in format to what :func:`find_segments_in_row` returns.
+    has_segments : np.ndarray of bool, shape (num_rows,)
+        ``has_segments[i]`` is True when the i-th sampled row has at
+        least one segment.
+    """
+    rows = mask[::step]  # shape (num_rows, width)
+    num_rows = rows.shape[0]
+
+    # Find all nonzero positions in one call
+    row_indices, cols = np.nonzero(rows)
+
+    if row_indices.size == 0:
+        return [], np.zeros(num_rows, dtype=bool)
+
+    # Pre-compute which rows have segments
+    has_segments = np.zeros(num_rows, dtype=bool)
+    np.add.at(has_segments, row_indices, True)
+
+    # Find row boundaries: where row_indices changes value
+    row_breaks = np.concatenate([[0], np.where(np.diff(row_indices) != 0)[0] + 1, [row_indices.size]])
+
+    row_data: List[Tuple[int, int, List[Tuple[int, int]]]] = []
+
+    for i in range(len(row_breaks) - 1):
+        start = row_breaks[i]
+        end = row_breaks[i + 1]
+        ri = int(row_indices[start])
+        row_cols = cols[start:end]
+
+        # Find segment breaks within this row
+        if row_cols.size == 0:
+            continue
+
+        seg_breaks = np.concatenate([[0], np.where(np.diff(row_cols) > 1)[0] + 1, [row_cols.size]])
+
+        segments: List[Tuple[int, int]] = []
+        for j in range(len(seg_breaks) - 1):
+            s = seg_breaks[j]
+            e = seg_breaks[j + 1]
+            x_start = int(row_cols[s])
+            x_end = int(row_cols[e - 1]) + 1
+            segments.append((x_start, x_end))
+
+        y = ri * step
+        row_data.append((ri, y, segments))
+
+    return row_data, has_segments
+
+
 def _hatch_path_legacy(mask: np.ndarray, line_step: int) -> str:
     """Legacy hatch path generation - all lines left-to-right with separate M commands."""
-    h, _ = mask.shape
-    cmds = []
     step = max(1, line_step)
-    for y in range(0, h, step):
-        row = mask[y]
-        segs = find_segments_in_row(row)
+
+    row_data, _ = _find_all_segments(mask, step)
+
+    cmds = []
+    for _, y, segs in row_data:
         for x1, x2 in segs:
             cmds.append(f"M{x1} {y} H{x2}")
     return " ".join(cmds)
 
 
 def _maybe_add_arc(
-    mask: np.ndarray,
-    y: int,
-    step: int,
     row_idx: int,
     segs: List[Tuple[int, int]],
     arc_radius: float,
     cmds: List[str],
+    next_row_has_segments: bool,
+    next_y: int,
 ) -> bool:
     """If conditions are met, append an arc command bridging to the next row.
 
@@ -139,13 +198,7 @@ def _maybe_add_arc(
     if arc_radius <= 0 or row_idx % 2 != 0:
         return False
 
-    h = mask.shape[0]
-    next_y = y + step
-    if next_y >= h:
-        return False
-
-    next_row = mask[next_y]
-    if not np.any(next_row):
+    if not next_row_has_segments:
         return False
 
     last_x = segs[-1][1]
@@ -175,20 +228,28 @@ def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float =
     transitioning from an odd row to an even row without an arc.
     """
     h, _ = mask.shape
-    cmds: list[str] = []
     step = max(1, line_step)
+
+    row_data, has_segments = _find_all_segments(mask, step)
+    num_rows = len(has_segments)
+
+    # Build a lookup from row_idx → (y, segments) for O(1) access
+    seg_lookup = {ri: (y, segs) for ri, y, segs in row_data}
+
+    cmds: list[str] = []
 
     # Whether the pen is currently positioned at (x, y_of_next_row_to_draw)
     # i.e. an arc just fired and the next row's H commands will draw on the
     # correct y without needing a new M.
     chain_live = False
 
-    for row_idx, y in enumerate(range(0, h, step)):
-        row = mask[y]
-        segs = find_segments_in_row(row)
-        if not segs:
+    for row_idx in range(num_rows):
+        if row_idx not in seg_lookup:
+            # Empty row — chain breaks
             chain_live = False
             continue
+
+        y, segs = seg_lookup[row_idx]
 
         # Even rows (0,2,4): left-to-right; Odd rows (1,3,5): right-to-left
         if row_idx % 2 == 1:
@@ -204,21 +265,18 @@ def _hatch_path_serpentine(mask: np.ndarray, line_step: int, arc_radius: float =
 
         # Chain is live ONLY when we just emitted an arc — otherwise the pen
         # is still at this row's y and the next row's H would re-draw it.
-        chain_live = _maybe_add_arc(mask, y, step, row_idx, segs, arc_radius, cmds)
+        next_row_has = bool(has_segments[row_idx + 1]) if row_idx + 1 < num_rows else False
+        next_y = (row_idx + 1) * step if row_idx + 1 < num_rows else h
+        chain_live = _maybe_add_arc(row_idx, segs, arc_radius, cmds, next_row_has, next_y)
 
     return " ".join(cmds)
 
 
 def _count_segments_in_mask(mask: np.ndarray, line_step: int) -> int:
     """Count total hatch segments in a mask (for stats)."""
-    h, _ = mask.shape
     step = max(1, line_step)
-    total = 0
-    for y in range(0, h, step):
-        row = mask[y]
-        segs = find_segments_in_row(row)
-        total += len(segs)
-    return total
+    row_data, _ = _find_all_segments(mask, step)
+    return sum(len(segs) for _, _, segs in row_data)
 
 
 def compute_layer_stats(mask: np.ndarray, line_step: int) -> Dict[str, Any]:

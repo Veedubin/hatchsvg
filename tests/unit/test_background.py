@@ -42,11 +42,11 @@ def test_near_duplicate_shade_is_also_background():
     # Reset to make all border = bg color.
     color_idx = np.zeros((20, 20), dtype=np.int32)  # all are "bg color idx 0"
 
-    # Palette: bg (243, 215, 167) + near-duplicate (251, 235, 196, dist ≈ 36)
+    # Palette: bg (243, 215, 167) + near-duplicate (255, 225, 175, dist ≈ 17.5)
     # + distinctly-different dark brown (122, 78, 46, dist ≈ 219)
     palette = [
         (243, 215, 167),  # idx 0 — bg
-        (251, 235, 196),  # idx 1 — near-duplicate (dist 36.1, within threshold 50)
+        (255, 225, 175),  # idx 1 — near-duplicate (dist 17.5, within threshold 30)
         (122, 78, 46),  # idx 2 — far from bg (dist 219)
     ]
     result = _detect_background(visible, color_idx, palette)

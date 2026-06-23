@@ -724,7 +724,7 @@ def _detect_background(
     visible: np.ndarray,
     color_idx: np.ndarray,
     palette: List[Tuple[int, int, int]],
-    near_threshold: float = 50.0,
+    near_threshold: float = 30.0,
 ) -> set:
     """Detect the dominant border color and return all palette indices close to it.
 

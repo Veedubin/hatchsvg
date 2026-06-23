@@ -49,6 +49,7 @@ PRESETS: Dict[str, PresetSpec] = {
         "description": "Brand marks, flat colors, clean edges. Bold hatch, single combined group per color (no separate outline — outline mode generates one short line per pixel row and wastes pen moves on complex shapes).",
         "max_palette": 6,
         "line_step": 5,
+        "stroke_width": 0.5,
         "separate_outline": False,
         "continuous_paths": True,
         "arc_radius": 3.0,

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-06-22
+
+### Changed
+- **Vectorized `_hatch_path_serpentine` and related functions.** Replaced per-row numpy operations (~359 `np.nonzero` + `mask[y]` calls for a 1794×1794 image at step=5) with a single vectorized pass via new `_find_all_segments` helper. One `mask[::step]` slice + one `np.nonzero` call pre-computes all segment data; row grouping and segment break detection use `np.diff`. `_hatch_path_legacy` and `_count_segments_in_mask` also vectorized. `_maybe_add_arc` no longer accesses `mask` — uses pre-computed `next_row_has_segments` bool. Output is byte-identical (golden file test passes). Expected 3-5x speedup on hatching phase.
+
+### Notes
+- 222 tests pass. Ruff clean, format clean.
+- `find_segments_in_row` kept unchanged (public API used by tests).
+
 ## [2.2.5] - 2026-06-22
 
 ### Changed

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.5] - 2026-06-22
+
+### Changed
+- **Extracted `_build_render_params_from_dict` helper** — replaced three identical RenderParams construction blocks in `_load_config_session`, `_load_config_cli`, and `_load_config_cli_with_preset` (~50 lines of duplication eliminated).
+- **Replaced private `parser._actions` access** with public `_hatchsvg_action_info` dict built in `cli.py`. `_extract_explicit_args` now uses `_extract_from_action_info` helper with backward-compatible fallback for tests.
+
+### Added
+- **56 new tests** across 7 files (3 new, 4 extended):
+  - `test_quantization.py` (5): `build_color_index_map` quantization path, exact-color path, visible mask
+  - `test_stroke_style.py` (15): `_is_white_medium_pixel` edge cases, `_resolve_stroke_style` full pipeline
+  - `test_hatch.py` (+7): scipy fallback, component filter, empty mask, component ordering
+  - `test_session.py` (+13): load/save error handling, numpy serialization, `skip_bg` field name
+  - `test_preset_config.py` (+7): `_extract_explicit_args` normalization, `_hatchsvg_action_info` path
+  - `test_split_layers.py` (4): `_write_split_layers` naming, slug collision, hatch angles, 3-digit index
+  - `test_closest_marker.py` (5): empty palette, saturation penalties, equal-distance tiebreaking
+
+### Notes
+- 222 tests pass (176 unit + 46 integration). Ruff clean, format clean.
+- Coverage plugin (`pytest-cov`) is slow on 222 tests; individual test files all pass in <0.2s.
+
 ## [2.2.4] - 2026-06-22
 
 ### Fixed

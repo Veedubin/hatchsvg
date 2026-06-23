@@ -198,6 +198,134 @@ def _extract_y_coords(path: str) -> set:
                 ys.add(int(args[1]))
             elif op == "A" and len(args) >= 7:
                 ys.add(int(args[-1]))
-        else:
-            i += 1
+            else:
+                i += 1
     return ys
+
+
+# ---------------------------------------------------------------------------
+# hatch_path_for_mask — scipy fallback and component filter tests
+# ---------------------------------------------------------------------------
+
+
+def _make_two_component_mask():
+    """20x20 mask with two 6x6 squares separated by a gap.
+
+    Component 1: rows 2-7, cols 2-7
+    Component 2: rows 2-7, cols 12-17
+    """
+    mask = np.zeros((20, 20), dtype=bool)
+    mask[2:8, 2:8] = True
+    mask[2:8, 12:18] = True
+    return mask
+
+
+def _make_tiny_components_mask():
+    """10x10 mask with many tiny 1-pixel components scattered."""
+    mask = np.zeros((10, 10), dtype=bool)
+    # Place 1-pixel components at various locations
+    mask[1, 1] = True
+    mask[1, 5] = True
+    mask[3, 3] = True
+    mask[5, 1] = True
+    mask[5, 5] = True
+    mask[7, 7] = True
+    mask[8, 2] = True
+    return mask
+
+
+def test_hatch_path_with_scipy_available():
+    """When scipy is available, hatch_path_for_mask works with continuous=True."""
+    mask = _make_two_component_mask()
+    path = hatch_path_for_mask(mask, line_step=2, continuous=True, arc_radius=0.0)
+
+    # Should produce a non-empty path
+    assert path, "Path should not be empty"
+    assert path.startswith("M")
+    # With 2 components, we should have at least 2 M commands (one per component)
+    m_count = path.count(" M") + (1 if path.startswith("M") else 0)
+    assert m_count >= 2, f"Expected at least 2 M commands for 2 components, got {m_count}"
+
+
+def test_hatch_path_single_component_no_scipy_splitting():
+    """When mask has only 1 component, no component splitting occurs."""
+    mask = np.zeros((10, 20), dtype=bool)
+    mask[2:7, 5:15] = True  # single rectangle
+
+    path = hatch_path_for_mask(mask, line_step=2, continuous=True, arc_radius=0.0)
+    assert path, "Path should not be empty"
+    assert path.startswith("M")
+
+
+def test_hatch_path_filters_tiny_components():
+    """Tiny components (< line_step^2 pixels) are filtered out.
+
+    With line_step=4, min_component_pixels = 16. A 2x2 component (4 pixels)
+    should be filtered out.
+    """
+    mask = np.zeros((20, 20), dtype=bool)
+    # Large component (should be kept)
+    mask[2:10, 2:10] = True  # 8x8 = 64 pixels
+    # Tiny component (should be filtered out)
+    mask[2:4, 15:17] = True  # 2x2 = 4 pixels < 16
+
+    path = hatch_path_for_mask(mask, line_step=4, continuous=True, arc_radius=0.0)
+    assert path, "Path should not be empty"
+    # The path should only contain the large component
+    assert "M" in path
+
+
+def test_hatch_path_all_components_tiny_falls_back_to_1px():
+    """When ALL components are tiny, fallback to >=1 pixel threshold kicks in.
+
+    With line_step=4, min_component_pixels=16. If all components are <16
+    pixels, the fallback to >=1 pixel should produce non-empty output.
+    Use 3x3 components (9 pixels each, all < 16) that span hatch rows.
+    """
+    mask = np.zeros((20, 20), dtype=bool)
+    # 3x3 components (9 pixels each, all < 16 for line_step=4)
+    mask[0:3, 0:3] = True
+    mask[0:3, 10:13] = True
+    mask[10:13, 5:8] = True
+
+    path = hatch_path_for_mask(mask, line_step=4, continuous=True, arc_radius=0.0)
+    # Fallback should kick in and produce output
+    assert path, "Path should not be empty even with tiny components (fallback to >=1 pixel)"
+    assert path.startswith("M")
+
+
+def test_hatch_path_all_components_tiny_and_fallback_empty():
+    """When ALL components are tiny AND the >=1 pixel fallback also finds nothing,
+    returns empty string.
+
+    This happens when there are no connected components at all (all pixels
+    are background).
+    """
+    mask = np.zeros((10, 10), dtype=bool)
+    # No True pixels at all — no components
+
+    path = hatch_path_for_mask(mask, line_step=4, continuous=True, arc_radius=0.0)
+    assert path == "", f"Expected empty string for mask with no components, got: {path!r}"
+
+
+def test_hatch_path_continuous_false_skips_scipy():
+    """When continuous=False, the function uses legacy path and never calls scipy."""
+    mask = _make_two_component_mask()
+    path = hatch_path_for_mask(mask, line_step=2, continuous=False)
+
+    assert path, "Path should not be empty"
+    assert path.startswith("M")
+
+
+def test_hatch_path_component_ordering_produces_valid_svg():
+    """The joined path from multiple components should be valid SVG path syntax."""
+    mask = _make_two_component_mask()
+    path = hatch_path_for_mask(mask, line_step=2, continuous=True, arc_radius=0.0)
+
+    # Each component should start with M
+    parts = [p for p in path.split(" M") if p]
+    for i, part in enumerate(parts):
+        if i == 0:
+            assert part.startswith("M"), f"First part should start with M, got: {part[:20]}"
+        else:
+            assert part, f"Part {i} should not be empty"

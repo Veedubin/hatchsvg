@@ -1435,30 +1435,35 @@ def process_image_to_hatched_svg(
 # --------------------------------------------------------------------
 
 
+def _build_render_params_from_dict(d: Dict[str, Any]) -> RenderParams:
+    """Build a RenderParams from a dict using ``.get(key, default)`` for every field."""
+    return RenderParams(
+        max_palette=d.get("max_palette", 12),
+        line_step=d.get("line_step", 4),
+        alpha_threshold=d.get("alpha_threshold", 10),
+        min_pixels=d.get("min_pixels", 200),
+        stroke_width=d.get("stroke_width", 0.5),
+        outline_width=d.get("outline_width", 0.8),
+        skip_bg=d.get("skip_bg", False),
+        white_medium=d.get("white_medium", False),
+        paper_white_soft=d.get("paper_white_soft", 20),
+        scale=d.get("scale", 1.0),
+        separate_outline=d.get("separate_outline", False),
+        naming_mode=d.get("naming_mode", "inkscape"),
+        continuous_paths=d.get("continuous_paths", False),
+        arc_radius=d.get("arc_radius", 0.0),
+        hatch_angles=d.get("hatch_angles", None),
+        hatch_angle=d.get("hatch_angle", 0.0),
+    )
+
+
 def _load_config_session(args) -> Tuple[RenderParams, Optional[Dict], Optional[Dict], Optional[str]]:
     """Load configuration from a session JSON file."""
     session_path = Path(args.use_session)
     session = load_session(session_path)
 
     p_dict = session["params"]
-    params = RenderParams(
-        max_palette=p_dict.get("max_palette", 12),
-        line_step=p_dict.get("line_step", 4),
-        alpha_threshold=p_dict.get("alpha_threshold", 10),
-        min_pixels=p_dict.get("min_pixels", 200),
-        stroke_width=p_dict.get("stroke_width", 0.5),
-        outline_width=p_dict.get("outline_width", 0.8),
-        skip_bg=p_dict.get("skip_bg", False),
-        white_medium=p_dict.get("white_medium", False),
-        paper_white_soft=p_dict.get("paper_white_soft", 20),
-        scale=p_dict.get("scale", 1.0),
-        separate_outline=p_dict.get("separate_outline", False),
-        naming_mode=p_dict.get("naming_mode", "inkscape"),
-        continuous_paths=p_dict.get("continuous_paths", False),
-        arc_radius=p_dict.get("arc_radius", 0.0),
-        hatch_angles=p_dict.get("hatch_angles", None),
-        hatch_angle=p_dict.get("hatch_angle", 0.0),
-    )
+    params = _build_render_params_from_dict(p_dict)
     color_map = session["color_map"]
 
     marker_palette = None
@@ -1488,21 +1493,23 @@ def _load_config_cli(args) -> Tuple[RenderParams, Optional[Dict], Optional[Dict]
 
     ow = args.outline_width if args.outline_width is not None else max(1.0, sw * 1.6)
 
-    params = RenderParams(
-        max_palette=args.max_palette,
-        line_step=args.line_step,
-        alpha_threshold=args.alpha_threshold,
-        min_pixels=args.min_pixels,
-        stroke_width=sw,
-        outline_width=ow,
-        skip_bg=not args.no_skip_background,
-        white_medium=args.white_medium,
-        paper_white_soft=args.paper_white_soft,
-        scale=args.scale,
-        separate_outline=args.separate_outline,
-        naming_mode=args.naming_mode,
-        continuous_paths=args.continuous_paths,
-        arc_radius=args.arc_radius,
+    params = _build_render_params_from_dict(
+        {
+            "max_palette": args.max_palette,
+            "line_step": args.line_step,
+            "alpha_threshold": args.alpha_threshold,
+            "min_pixels": args.min_pixels,
+            "stroke_width": sw,
+            "outline_width": ow,
+            "skip_bg": not args.no_skip_background,
+            "white_medium": args.white_medium,
+            "paper_white_soft": args.paper_white_soft,
+            "scale": args.scale,
+            "separate_outline": args.separate_outline,
+            "naming_mode": args.naming_mode,
+            "continuous_paths": args.continuous_paths,
+            "arc_radius": args.arc_radius,
+        }
     )
     return params, marker_palette, None, args.palette_file
 
@@ -1563,24 +1570,7 @@ def _load_config_cli_with_preset(
 
     # Build RenderParams from the merged dict. This is the only safe way to
     # set a mix of preset defaults + explicit overrides without re-argparsing.
-    params = RenderParams(
-        max_palette=merged.get("max_palette", 12),
-        line_step=merged.get("line_step", 4),
-        alpha_threshold=merged.get("alpha_threshold", 10),
-        min_pixels=merged.get("min_pixels", 200),
-        stroke_width=merged.get("stroke_width", 0.5),
-        outline_width=merged.get("outline_width", 0.8),
-        skip_bg=merged.get("skip_bg", False),
-        white_medium=merged.get("white_medium", False),
-        paper_white_soft=merged.get("paper_white_soft", 20),
-        scale=merged.get("scale", 1.0),
-        separate_outline=merged.get("separate_outline", False),
-        naming_mode=merged.get("naming_mode", "inkscape"),
-        continuous_paths=merged.get("continuous_paths", False),
-        arc_radius=merged.get("arc_radius", 0.0),
-        hatch_angles=merged.get("hatch_angles", None),
-        hatch_angle=merged.get("hatch_angle", 0.0),
-    )
+    params = _build_render_params_from_dict(merged)
 
     # Load palette if provided (not affected by preset)
     marker_palette = None
@@ -1604,12 +1594,10 @@ def _load_config_cli_with_preset(
 def _extract_explicit_args(args) -> Dict[str, Any]:
     """Return a dict of CLI args the user explicitly set on the command line.
 
-    Compares each attribute of ``args`` against the corresponding argparse
-    action's default. Anything that differs is treated as explicit. For
-    store_true flags, presence (value=True) is explicit; absence is not.
-
-    The parser instance must be attached to ``args`` as ``_hatchsvg_parser``
-    (the CLI does this so we don't have to walk the call stack).
+    Uses the ``_hatchsvg_action_info`` dict attached by the CLI to determine
+    which flags the user explicitly passed. Falls back to ``parser._actions``
+    when the dict is absent (e.g. in tests that only attach
+    ``_hatchsvg_parser``).
 
     Returns
     -------
@@ -1618,13 +1606,21 @@ def _extract_explicit_args(args) -> Dict[str, Any]:
         fields the user touched. Field names are normalized to ``RenderParams``
         field names (e.g. ``--no-skip-background`` becomes ``skip_bg``).
     """
+    action_info = getattr(args, "_hatchsvg_action_info", None)
+
+    if action_info is not None:
+        # Preferred path: public dict attached by cli.py
+        return _extract_from_action_info(args, action_info)
+
+    # Fallback: introspect parser._actions for tests that only attach
+    # _hatchsvg_parser.
+    parser = getattr(args, "_hatchsvg_parser", None)
+    if parser is None:
+        return {}
+
     import argparse as _argparse
 
-    parser = getattr(args, "_hatchsvg_parser", None)
     explicit: Dict[str, Any] = {}
-    if parser is None:
-        return explicit
-
     for action in parser._actions:
         if not isinstance(action, _argparse.Action):
             continue
@@ -1637,15 +1633,8 @@ def _extract_explicit_args(args) -> Dict[str, Any]:
         except AttributeError:
             continue
 
-        # Check whether the user explicitly passed this flag on the command
-        # line. For store_true/store_false actions, presence (value=True or
-        # False) is explicit. For other actions, we check the _explicit_{dest}
-        # attribute set by _TrackedAction in cli.py. If that attribute is
-        # missing (e.g. in tests that use plain argparse), fall back to
-        # comparing current != action.default.
         flag_present = getattr(args, f"_explicit_{action.dest}", None)
         if flag_present is None:
-            # _TrackedAction not used — fall back to default comparison
             if isinstance(action, (_argparse._StoreTrueAction, _argparse._StoreFalseAction)):
                 flag_present = current is True
             else:
@@ -1653,13 +1642,41 @@ def _extract_explicit_args(args) -> Dict[str, Any]:
         else:
             flag_present = bool(flag_present)
 
-        # Normalize: --no-skip-background sets args.no_skip_background=True but
-        # means skip_bg=False on RenderParams.
         if action.dest == "no_skip_background" and current is True:
             explicit["skip_bg"] = False
             continue
         if flag_present:
             explicit[action.dest] = current
+
+    return explicit
+
+
+def _extract_from_action_info(args, action_info: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract explicit args using the public _hatchsvg_action_info dict."""
+    explicit: Dict[str, Any] = {}
+
+    for dest, info in action_info.items():
+        current = getattr(args, dest, None)
+
+        # Check whether the user explicitly passed this flag on the command
+        # line. _explicit_{dest} is set by _TrackedAction in cli.py. If
+        # that attribute is missing, fall back to default comparison.
+        flag_present = getattr(args, f"_explicit_{dest}", None)
+        if flag_present is None:
+            if info["is_store_bool"]:
+                flag_present = current is True
+            else:
+                flag_present = current != info["default"]
+        else:
+            flag_present = bool(flag_present)
+
+        # Normalize: --no-skip-background sets args.no_skip_background=True but
+        # means skip_bg=False on RenderParams.
+        if dest == "no_skip_background" and current is True:
+            explicit["skip_bg"] = False
+            continue
+        if flag_present:
+            explicit[dest] = current
 
     return explicit
 

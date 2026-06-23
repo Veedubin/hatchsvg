@@ -4,7 +4,7 @@ import argparse
 
 import pytest
 
-from hatchsvg.core import get_run_configuration
+from hatchsvg.core import _extract_explicit_args, get_run_configuration
 
 
 def _make_args(**overrides):
@@ -146,3 +146,68 @@ def test_no_skip_background_explicit_overrides_preset_skip_bg():
     args = _make_args(preset="portrait", no_skip_background=True)
     params, _, _, _ = get_run_configuration(args, preset_name="portrait")
     assert params.skip_bg is False  # --no-skip-background wins
+
+
+# ---------------------------------------------------------------------------
+# _extract_explicit_args unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_explicit_no_skip_background_normalizes_to_skip_bg():
+    """--no-skip-background normalizes to skip_bg: False in the explicit dict."""
+    args = _make_args(no_skip_background=True)
+    explicit = _extract_explicit_args(args)
+    assert explicit == {"skip_bg": False}
+
+
+def test_explicit_store_true_false_not_in_dict():
+    """A store_true flag that is False (not passed) does NOT appear in explicit dict."""
+    args = _make_args(white_medium=False)
+    explicit = _extract_explicit_args(args)
+    assert "white_medium" not in explicit
+
+
+def test_explicit_store_true_true_in_dict():
+    """A store_true flag that is True (passed) DOES appear in explicit dict."""
+    args = _make_args(white_medium=True)
+    explicit = _extract_explicit_args(args)
+    assert explicit.get("white_medium") is True
+
+
+def test_explicit_numeric_matches_default_not_in_dict():
+    """A numeric flag with value matching default does NOT appear (fallback path)."""
+    args = _make_args(max_palette=12)
+    # Remove any _explicit_ marker that _make_args might have set
+    if hasattr(args, "_explicit_max_palette"):
+        delattr(args, "_explicit_max_palette")
+    explicit = _extract_explicit_args(args)
+    assert "max_palette" not in explicit
+
+
+def test_explicit_numeric_differs_from_default_in_dict():
+    """A numeric flag with value different from default DOES appear."""
+    args = _make_args(max_palette=6)
+    if hasattr(args, "_explicit_max_palette"):
+        delattr(args, "_explicit_max_palette")
+    explicit = _extract_explicit_args(args)
+    assert explicit.get("max_palette") == 6
+
+
+def test_explicit_action_info_path_used_when_present():
+    """When _hatchsvg_action_info is present, it's used instead of parser._actions."""
+    args = _make_args(max_palette=6)
+    # Attach action_info dict (the new preferred path)
+    args._hatchsvg_action_info = {
+        "max_palette": {"default": 12, "is_store_bool": False},
+        "white_medium": {"default": False, "is_store_bool": True},
+    }
+    explicit = _extract_explicit_args(args)
+    assert explicit.get("max_palette") == 6
+    assert "white_medium" not in explicit
+
+
+def test_explicit_no_parser_no_action_info_returns_empty():
+    """When neither _hatchsvg_action_info nor _hatchsvg_parser is present, returns empty dict."""
+    args = argparse.Namespace(input="in.png", output_svg="out.svg")
+    explicit = _extract_explicit_args(args)
+    assert explicit == {}

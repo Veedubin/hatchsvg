@@ -312,6 +312,22 @@ def main():
     # explicit CLI flags against parser defaults (used by --preset).
     a._hatchsvg_parser = p  # type: ignore[attr-defined]
 
+    # Build action info dict so core._extract_explicit_args doesn't need parser._actions
+    import argparse as _argparse
+
+    a._hatchsvg_action_info = {}  # type: ignore[attr-defined]
+    for action in p._actions:
+        if not isinstance(action, _argparse.Action):
+            continue
+        if action.dest in ("help", "version", "input", "output_svg", "preset"):
+            continue
+        if not action.option_strings:
+            continue
+        a._hatchsvg_action_info[action.dest] = {  # type: ignore[attr-defined]
+            "default": action.default,
+            "is_store_bool": isinstance(action, (_argparse._StoreTrueAction, _argparse._StoreFalseAction)),
+        }
+
     # Check for Rich if --progress is requested
     if a.progress and not HAS_RICH:
         print("Warning: --progress requires 'rich' package. Install with: pip install rich")

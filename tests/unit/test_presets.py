@@ -50,7 +50,7 @@ def test_get_preset_returns_spec():
     """get_preset returns the dict for a known name."""
     spec = get_preset("logo")
     assert spec["max_palette"] == 6
-    assert spec["separate_outline"] is False
+    assert spec["separate_outline"] is True
 
 
 def test_get_preset_raises_for_unknown():
@@ -64,7 +64,7 @@ def test_apply_preset_overrides_base():
     result = apply_preset({}, "logo")
     assert result["max_palette"] == 6
     assert result["line_step"] == 5
-    assert result["separate_outline"] is False
+    assert result["separate_outline"] is True
 
 
 def test_apply_preset_does_not_leak_description():
@@ -91,14 +91,14 @@ def test_fast_preset_disables_optimization():
     assert spec["line_step"] == 8  # very coarse
 
 
-def test_logo_preset_disables_separate_outline():
-    """The 'logo' preset should disable separate_outline — for pen plotters, separate
-    outline mode generates thousands of short pen-down moves (one per pixel row of
-    the border mask), wasting ink and time on complex shapes. v2.2.2 reverted to
-    the v1.x default of False.
+def test_logo_preset_enables_separate_outline():
+    """The 'logo' preset enables separate_outline for crisp border definition.
+    Pre-v2.0.0 output had 12 groups (6 hatch + 6 outline) with dedicated outline
+    layers that gave letters their sharp edges. v2.2.2 changed this to False for
+    pen plotter efficiency, but the output quality suffered. Restored to True.
     """
     spec = get_preset("logo")
-    assert spec["separate_outline"] is False
+    assert spec["separate_outline"] is True
 
 
 def test_line_art_preset_low_min_pixels():
